@@ -5,8 +5,8 @@
 
 Summary:	A software center for GNOME
 Name:		gnome-software
-Version:	3.14.1
-Release:	%mkrel 2
+Version:	3.16.1
+Release:	1
 License:	GPLv2+
 Group:		Graphical desktop/GNOME
 URL:		https://wiki.gnome.org/Apps/Software
@@ -38,7 +38,7 @@ and update software in the GNOME desktop.
 
 %build
 autoreconf -vfi
-%configure2_5x --disable-static
+%configure --disable-static
 %make
 
 %install
