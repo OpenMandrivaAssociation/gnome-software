@@ -25,6 +25,7 @@ BuildRequires:	pkgconfig(packagekit-glib2) >= 1.0.0
 BuildRequires:	pkgconfig(libsoup-2.4)
 BuildRequires:	pkgconfig(gsettings-desktop-schemas) >= 3.11.4
 BuildRequires:	pkgconfig(gnome-desktop-3.0)
+BuildRequires:	pkgconfig(polkit-gobject-1)
 BuildRequires:	gnome-common
 BuildRequires:	autoconf
 Requires:	adwaita-icon-theme
