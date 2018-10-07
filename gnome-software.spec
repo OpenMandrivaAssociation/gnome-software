@@ -5,8 +5,8 @@
 
 Summary:	A software center for GNOME
 Name:		gnome-software
-Version:	3.18.3
-Release:	2
+Version:	3.30.2
+Release:	1
 License:	GPLv2+
 Group:		Graphical desktop/GNOME
 URL:		https://wiki.gnome.org/Apps/Software
