@@ -26,9 +26,20 @@ BuildRequires:	pkgconfig(libsoup-2.4)
 BuildRequires:	pkgconfig(gsettings-desktop-schemas) >= 3.11.4
 BuildRequires:	pkgconfig(gnome-desktop-3.0)
 BuildRequires:	pkgconfig(polkit-gobject-1)
-BuildRequires:	gnome-common
 BuildRequires:	autoconf
+BuildRequires:	pkgconfig(json-glib-1.0)
+BuildRequires:	pkgconfig(libsecret-1)
+BuildRequires:	pkgconfig(flatpak)
+BuildRequires:	pkgconfig(valgrind)
+BuildRequires:	pkgconfig(rpm)
+BuildRequires:	pkgconfig(gudev-1.0)
+BuildRequires:	pkgconfig(oauth)
+BuildRequires:	gnome-common
+BuildRequires:	meson
 Requires:	adwaita-icon-theme
+Requires:	gnome-packagekit
+Requires:	flatpak
+
 
 %description
 %{name} is an application that makes it easy to add, remove
@@ -38,12 +49,21 @@ and update software in the GNOME desktop.
 %setup -q
 
 %build
-autoreconf -vfi
-%configure --disable-static
-%make
+%meson		\
+	-Denable-polkit=true \
+	-Denable-gnome-desktop=true \
+	-Denable-packagekit=true \
+	-Denable-flatpak=true \
+	-Denable-ostree=true \
+	-Denable-rpm=true \
+	-Denable-shell-extensions=true \
+	-Denable-gudev=true \
+	-Denable-webapps=true \
+	-Dfwupd=false
+%meson_build
 
 %install
-%makeinstall_std
+%meson_install
 
 #we don't want these
 find %{buildroot} -name "*.la" -delete
