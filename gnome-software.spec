@@ -50,6 +50,9 @@ and update software in the GNOME desktop.
 %setup -q
 
 %build
+export CC=gcc
+export CXX=g++
+
 %meson		\
 	-Denable-polkit=true \
 	-Denable-gnome-desktop=true \
