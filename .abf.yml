@@ -1,5 +1,2 @@
-removed_sources:
-  gnome-software-3.14.1.tar.xz: d129722710df1517707d6c80ef6b9324555c81f4
-  gnome-software-3.16.1.tar.xz: 69de75f5c73c6f0167b1e975724061be9844b0d2
 sources:
-  gnome-software-3.18.3.tar.xz: f8b8c1ff9d31c56ec3af41a91f368cc7c8c4b4c2
+  gnome-software-3.32.1.tar.xz: 87d26f04b141b15729bf7f39c8271b156c80133f
