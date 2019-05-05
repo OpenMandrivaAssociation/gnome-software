@@ -13,6 +13,7 @@ URL:		https://wiki.gnome.org/Apps/Software
 Source0:	https://download.gnome.org/sources/%{name}/%{url_ver}/%{name}-%{version}.tar.xz
 BuildRequires:	cmake
 BuildRequires:	gettext
+BuildRequires:	gtk-doc
 BuildRequires:	intltool
 BuildRequires:	xsltproc
 BuildRequires:	docbook-style-xsl
@@ -40,6 +41,7 @@ BuildRequires:	gnome-common
 BuildRequires:	meson
 BuildRequires:	pkgconfig(xmlb)
 BuildRequires:	pkgconfig(goa-1.0)
+BuildRequires:  pkgconfig(gtk-doc)
 Requires:	adwaita-icon-theme
 Requires:	gnome-packagekit
 Requires:	flatpak
