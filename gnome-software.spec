@@ -11,6 +11,7 @@ License:	GPLv2+
 Group:		Graphical desktop/GNOME
 URL:		https://wiki.gnome.org/Apps/Software
 Source0:	https://download.gnome.org/sources/%{name}/%{url_ver}/%{name}-%{version}.tar.xz
+BuildRequires:	cmake
 BuildRequires:	gettext
 BuildRequires:	intltool
 BuildRequires:	xsltproc
@@ -37,6 +38,7 @@ BuildRequires:	pkgconfig(gudev-1.0)
 BuildRequires:	pkgconfig(oauth)
 BuildRequires:	gnome-common
 BuildRequires:	meson
+BuildRequires:	pkgconfig(xmlb)
 Requires:	adwaita-icon-theme
 Requires:	gnome-packagekit
 Requires:	flatpak
