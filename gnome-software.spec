@@ -51,6 +51,24 @@ Requires:	flatpak
 %{name} is an application that makes it easy to add, remove
 and update software in the GNOME desktop.
 
+%package devel
+Summary: Headers for building external gnome-software plugins
+Group:	Development/GNOME and GTK+
+Requires: %{name}%{?_isa} = %{version}-%{release}
+
+%description devel
+These development files are for building gnome-software plugins outside
+the source tree. Most users do not need this subpackage installed.
+
+%package editor
+Summary: Banner designer for GNOME Software
+Group:		Graphical desktop/GNOME
+Requires: %{name}%{?_isa} = %{version}-%{release}
+
+%description editor
+Editor for designing banners for GNOME Software.
+
+
 %prep
 %setup -q
 
@@ -88,17 +106,36 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/*.desktop
 %dir %{_datadir}/%{name}/
 %{_datadir}/%{name}/*.png
 %{_datadir}/%{name}/*.svg
+%{_datadir}/gnome-software/featured-*.svg
+%{_datadir}/gnome-software/featured-*.jpg
 #{_datadir}/%{name}/featured.ini
 #dir #{_datadir}/%{name}/modulesets.d/
 #{_datadir}/%{name}/modulesets.d/*.xml
 %{_mandir}/man1/%{name}.1.*
 %{_iconsdir}/*/*/apps/*
+%{_iconsdir}/hicolor/scalable/status/software-installed-symbolic.svg
 %{_datadir}/metainfo/org.gnome.Software.appdata.xml
 %{_sysconfdir}/xdg/autostart/%{name}-service.desktop
 %{_datadir}/dbus-1/services/org.gnome.Software.service
 %{_datadir}/dbus-1/services/org.freedesktop.PackageKit.service
 %{_datadir}/glib-2.0/schemas/org.gnome.software.gschema.xml
-#{_datadir}/gnome-shell/search-providers/%{name}-search-provider.ini
+%{_datadir}/gnome-shell/search-providers/*-search-provider.ini
 %dir %{_libdir}/gs-plugins-*/
 %{_libdir}/gs-plugins-*/*.so
+%{_libexecdir}/gnome-software-cmd
+%{_libexecdir}/gnome-software-restarter
+%{_datadir}/metainfo/org.gnome.Software.Plugin.Epiphany.metainfo.xml
+%{_datadir}/metainfo/org.gnome.Software.Plugin.Flatpak.metainfo.xml
+%{_datadir}/metainfo/org.gnome.Software.Plugin.Odrs.metainfo.xml
 
+%files devel
+%{_libdir}/pkgconfig/gnome-software.pc
+%dir %{_includedir}/gnome-software
+%{_includedir}/gnome-software/*.h
+%{_datadir}/gtk-doc/html/gnome-software
+ 
+%files editor
+%{_bindir}/gnome-software-editor
+%{_datadir}/app-info/xmls/org.gnome.Software.Featured.xml
+%{_datadir}/applications/org.gnome.Software.Editor.desktop
+%{_mandir}/man1/gnome-software-editor.1*
