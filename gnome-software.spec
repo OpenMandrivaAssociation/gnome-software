@@ -82,23 +82,23 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/*.desktop
 %find_lang %name --with-gnome
 
 %files -f %{name}.lang
-%doc AUTHORS COPYING NEWS README
+%doc AUTHORS COPYING NEWS README.md
 %{_bindir}/%{name}
 %{_datadir}/applications/*.desktop
 %dir %{_datadir}/%{name}/
 %{_datadir}/%{name}/*.png
 %{_datadir}/%{name}/*.svg
-%{_datadir}/%{name}/featured.ini
-%dir %{_datadir}/%{name}/modulesets.d/
-%{_datadir}/%{name}/modulesets.d/*.xml
+#{_datadir}/%{name}/featured.ini
+#dir #{_datadir}/%{name}/modulesets.d/
+#{_datadir}/%{name}/modulesets.d/*.xml
 %{_mandir}/man1/%{name}.1.*
 %{_iconsdir}/*/*/apps/*
-%{_datadir}/appdata/*.appdata.xml
+%{_datadir}/metainfo/org.gnome.Software.appdata.xml
 %{_sysconfdir}/xdg/autostart/%{name}-service.desktop
 %{_datadir}/dbus-1/services/org.gnome.Software.service
 %{_datadir}/dbus-1/services/org.freedesktop.PackageKit.service
 %{_datadir}/glib-2.0/schemas/org.gnome.software.gschema.xml
-%{_datadir}/gnome-shell/search-providers/%{name}-search-provider.ini
+#{_datadir}/gnome-shell/search-providers/%{name}-search-provider.ini
 %dir %{_libdir}/gs-plugins-*/
 %{_libdir}/gs-plugins-*/*.so
 
