@@ -39,6 +39,7 @@ BuildRequires:	pkgconfig(oauth)
 BuildRequires:	gnome-common
 BuildRequires:	meson
 BuildRequires:	pkgconfig(xmlb)
+BuildRequires:	pkgconfig(goa-1.0)
 Requires:	adwaita-icon-theme
 Requires:	gnome-packagekit
 Requires:	flatpak
