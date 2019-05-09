@@ -5,7 +5,7 @@
 
 Summary:	A software center for GNOME
 Name:		gnome-software
-Version:	3.32.1
+Version:	3.32.2
 Release:	1
 License:	GPLv2+
 Group:		Graphical desktop/GNOME
