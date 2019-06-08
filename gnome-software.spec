@@ -48,7 +48,7 @@ Requires:	flatpak
 
 
 %description
-%{name} is an application that makes it easy to add, remove
+Gnome-software is an application that makes it easy to add, remove
 and update software in the GNOME desktop.
 
 %package devel
