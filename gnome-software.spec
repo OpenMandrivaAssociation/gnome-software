@@ -5,7 +5,7 @@
 
 Summary:	A software center for GNOME
 Name:		gnome-software
-Version:	3.32.2
+Version:	3.32.3
 Release:	1
 License:	GPLv2+
 Group:		Graphical desktop/GNOME
@@ -48,7 +48,7 @@ Requires:	flatpak
 
 
 %description
-%{name} is an application that makes it easy to add, remove
+Gnome-software is an application that makes it easy to add, remove
 and update software in the GNOME desktop.
 
 %package devel
@@ -73,8 +73,8 @@ Editor for designing banners for GNOME Software.
 %setup -q
 
 %build
-export CC=gcc
-export CXX=g++
+#export CC=gcc
+#export CXX=g++
 
 %meson		\
 	-Denable-polkit=true \
