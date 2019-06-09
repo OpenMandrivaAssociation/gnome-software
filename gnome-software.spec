@@ -73,8 +73,9 @@ Editor for designing banners for GNOME Software.
 %setup -q
 
 %build
-#export CC=gcc
-#export CXX=g++
+# with clang gnome-software dont want launch.
+export CC=gcc
+export CXX=g++
 
 %meson		\
 	-Denable-polkit=true \
