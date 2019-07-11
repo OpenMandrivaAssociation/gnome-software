@@ -77,6 +77,13 @@ Editor for designing banners for GNOME Software.
 export CC=gcc
 export CXX=g++
 
+# Fix build error on GCC after linker switch to LDD.
+%global ldflags %{ldflags} -fuse-ld=gold
+# Fix build error at i686 with gcc and gold. 
+%ifarch %{ix86}
+%global ldflags %{ldflags} -Wl,-z,notext
+%endif
+
 %meson		\
 	-Denable-polkit=true \
 	-Denable-gnome-desktop=true \
