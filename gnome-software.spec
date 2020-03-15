@@ -128,6 +128,7 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/*.desktop
 #{_datadir}/metainfo/org.gnome.Software.Plugin.Epiphany.metainfo.xml
 %{_datadir}/metainfo/org.gnome.Software.Plugin.Flatpak.metainfo.xml
 %{_datadir}/metainfo/org.gnome.Software.Plugin.Odrs.metainfo.xml
+%{_datadir}/app-info/xmls/org.gnome.Software.Featured.xml
 
 %files devel
 %{_libdir}/pkgconfig/gnome-software.pc
