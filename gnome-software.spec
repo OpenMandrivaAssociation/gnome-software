@@ -60,14 +60,6 @@ Requires: %{name}%{?_isa} = %{version}-%{release}
 These development files are for building gnome-software plugins outside
 the source tree. Most users do not need this subpackage installed.
 
-%package editor
-Summary: Banner designer for GNOME Software
-Group:		Graphical desktop/GNOME
-Requires: %{name}%{?_isa} = %{version}-%{release}
-
-%description editor
-Editor for designing banners for GNOME Software.
-
 
 %prep
 %setup -q
@@ -85,6 +77,7 @@ export CXX=g++
 %endif
 
 %meson		\
+	-Dmalcontent=false \
 	-Denable-polkit=true \
 	-Denable-gnome-desktop=true \
 	-Denable-packagekit=true \
@@ -141,9 +134,3 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/*.desktop
 %dir %{_includedir}/gnome-software
 %{_includedir}/gnome-software/*.h
 %{_datadir}/gtk-doc/html/gnome-software
- 
-%files editor
-%{_bindir}/gnome-software-editor
-%{_datadir}/app-info/xmls/org.gnome.Software.Featured.xml
-%{_datadir}/applications/org.gnome.Software.Editor.desktop
-%{_mandir}/man1/gnome-software-editor.1*
