@@ -125,7 +125,7 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/*.desktop
 %{_libdir}/gs-plugins-*/*.so
 %{_libexecdir}/gnome-software-cmd
 %{_libexecdir}/gnome-software-restarter
-%{_datadir}/metainfo/org.gnome.Software.Plugin.Epiphany.metainfo.xml
+#{_datadir}/metainfo/org.gnome.Software.Plugin.Epiphany.metainfo.xml
 %{_datadir}/metainfo/org.gnome.Software.Plugin.Flatpak.metainfo.xml
 %{_datadir}/metainfo/org.gnome.Software.Plugin.Odrs.metainfo.xml
 
