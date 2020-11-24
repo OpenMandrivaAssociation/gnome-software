@@ -35,6 +35,7 @@ BuildRequires:	pkgconfig(gspell-1)
 BuildRequires:	autoconf
 BuildRequires:	pkgconfig(json-glib-1.0)
 BuildRequires:	pkgconfig(libsecret-1)
+BuildRequires:	pkgconfig(fwupd)
 BuildRequires:	pkgconfig(flatpak)
 BuildRequires:	pkgconfig(valgrind)
 BuildRequires:	pkgconfig(rpm)
@@ -48,6 +49,7 @@ BuildRequires:  pkgconfig(gtk-doc)
 Requires:	adwaita-icon-theme
 Requires:	gnome-packagekit
 Requires:	flatpak
+Requires:	fwupd
 
 
 %description
@@ -90,7 +92,7 @@ the source tree. Most users do not need this subpackage installed.
 	-Denable-shell-extensions=true \
 	-Denable-gudev=true \
 	-Denable-webapps=true \
-	-Dfwupd=false
+	-Dfwupd=true
 %meson_build
 
 %install
@@ -98,6 +100,9 @@ the source tree. Most users do not need this subpackage installed.
 
 #we don't want these
 find %{buildroot} -name "*.la" -delete
+
+# remove unneeded static library
+rm %{buildroot}%{_libdir}/libgnomesoftware.a
 
 desktop-file-validate %{buildroot}%{_datadir}/applications/*.desktop
 
