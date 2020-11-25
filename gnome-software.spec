@@ -3,9 +3,12 @@
 # don't provide plugin .so
 %global __provides_exclude_from %{_libdir}/gs-plugins-3/.*\\.so
 
+#define _disable_ld_no_undefined 1
+#define _disable_lto 1
+
 Summary:	A software center for GNOME
 Name:		gnome-software
-Version:	3.36.1
+Version:	3.38.0
 Release:	1
 License:	GPLv2+
 Group:		Graphical desktop/GNOME
@@ -32,6 +35,7 @@ BuildRequires:	pkgconfig(gspell-1)
 BuildRequires:	autoconf
 BuildRequires:	pkgconfig(json-glib-1.0)
 BuildRequires:	pkgconfig(libsecret-1)
+BuildRequires:	pkgconfig(fwupd)
 BuildRequires:	pkgconfig(flatpak)
 BuildRequires:	pkgconfig(valgrind)
 BuildRequires:	pkgconfig(rpm)
@@ -45,6 +49,7 @@ BuildRequires:  pkgconfig(gtk-doc)
 Requires:	adwaita-icon-theme
 Requires:	gnome-packagekit
 Requires:	flatpak
+Requires:	fwupd
 
 
 %description
@@ -87,7 +92,7 @@ export CXX=g++
 	-Denable-shell-extensions=true \
 	-Denable-gudev=true \
 	-Denable-webapps=true \
-	-Dfwupd=false
+	-Dfwupd=true
 %meson_build
 
 %install
@@ -96,7 +101,16 @@ export CXX=g++
 #we don't want these
 find %{buildroot} -name "*.la" -delete
 
+# remove unneeded static library
+rm %{buildroot}%{_libdir}/libgnomesoftware.a
+
 desktop-file-validate %{buildroot}%{_datadir}/applications/*.desktop
+
+# set up for Mandriva
+cat >> %{buildroot}%{_datadir}/glib-2.0/schemas/org.gnome.software-openmandriva.gschema.override << FOE
+[org.gnome.software]
+official-repos = [ 'cooker-*', 'main-*', 'unsupported-*', 'restricted-*', 'non-free-*' ]
+FOE
 
 %find_lang %name --with-gnome
 
@@ -116,10 +130,12 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/*.desktop
 %{_iconsdir}/*/*/apps/*
 %{_iconsdir}/hicolor/scalable/status/software-installed-symbolic.svg
 %{_datadir}/metainfo/org.gnome.Software.appdata.xml
+%{_datadir}/metainfo/org.gnome.Software.Plugin.Fwupd.metainfo.xml
 %{_sysconfdir}/xdg/autostart/%{name}-service.desktop
 %{_datadir}/dbus-1/services/org.gnome.Software.service
 %{_datadir}/dbus-1/services/org.freedesktop.PackageKit.service
 %{_datadir}/glib-2.0/schemas/org.gnome.software.gschema.xml
+%{_datadir}/glib-2.0/schemas/org.gnome.software-openmandriva.gschema.override
 %{_datadir}/gnome-shell/search-providers/*-search-provider.ini
 %dir %{_libdir}/gs-plugins-*/
 %{_libdir}/gs-plugins-*/*.so
