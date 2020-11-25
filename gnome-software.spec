@@ -106,6 +106,12 @@ rm %{buildroot}%{_libdir}/libgnomesoftware.a
 
 desktop-file-validate %{buildroot}%{_datadir}/applications/*.desktop
 
+# set up for Mandriva
+cat >> %{buildroot}%{_datadir}/glib-2.0/schemas/org.gnome.software-openmandriva.gschema.override << FOE
+[org.gnome.software]
+official-repos = [ 'cooker-*', 'main-*', 'unsupported-*', 'restricted-*', 'non-free-*' ]
+FOE
+
 %find_lang %name --with-gnome
 
 %files -f %{name}.lang
