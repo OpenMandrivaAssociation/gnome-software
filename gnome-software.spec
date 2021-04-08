@@ -21,6 +21,7 @@ BuildRequires:	intltool
 BuildRequires:	xsltproc
 BuildRequires:	docbook-style-xsl
 BuildRequires:	desktop-file-utils
+BuildRequires:	pkgconfig(appstream)
 BuildRequires:	pkgconfig(appstream-glib) >= 0.2.4
 BuildRequires:	pkgconfig(gio-unix-2.0)
 BuildRequires:	pkgconfig(gtk+-3.0) >= 3.9.12
