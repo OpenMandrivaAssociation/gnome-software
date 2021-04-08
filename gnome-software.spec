@@ -90,6 +90,7 @@ export CXX=g++
 	-Dmalcontent=false \
 	-Denable-polkit=true \
 	-Denable-gnome-desktop=true \
+	-Dgsettings_desktop_schemas=enabled \
 	-Denable-packagekit=true \
 	-Denable-flatpak=true \
 	-Denable-ostree=true \
