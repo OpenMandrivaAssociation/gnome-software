@@ -3,12 +3,14 @@
 # don't provide plugin .so
 %global __provides_exclude_from %{_libdir}/gs-plugins-3/.*\\.so
 
+%global plugin_major 16
+
 #define _disable_ld_no_undefined 1
 #define _disable_lto 1
 
 Summary:	A software center for GNOME
 Name:		gnome-software
-Version:	3.38.2
+Version:	40.0
 Release:	1
 License:	GPLv2+
 Group:		Graphical desktop/GNOME
@@ -21,10 +23,13 @@ BuildRequires:	intltool
 BuildRequires:	xsltproc
 BuildRequires:	docbook-style-xsl
 BuildRequires:	desktop-file-utils
+BuildRequires:	pkgconfig(appstream)
 BuildRequires:	pkgconfig(appstream-glib) >= 0.2.4
 BuildRequires:	pkgconfig(gio-unix-2.0)
 BuildRequires:	pkgconfig(gtk+-3.0) >= 3.9.12
 BuildRequires:	pkgconfig(sqlite3)
+BuildRequires:	pkgconfig(libdnf)
+BuildRequires:	pkgconfig(libhandy-1)
 BuildRequires:	pkgconfig(libnotify)
 BuildRequires:	pkgconfig(packagekit-glib2) >= 1.0.0
 BuildRequires:	pkgconfig(libsoup-2.4)
@@ -85,6 +90,7 @@ export CXX=g++
 	-Dmalcontent=false \
 	-Denable-polkit=true \
 	-Denable-gnome-desktop=true \
+	-Dgsettings_desktop_schemas=enabled \
 	-Denable-packagekit=true \
 	-Denable-flatpak=true \
 	-Denable-ostree=true \
@@ -102,7 +108,7 @@ export CXX=g++
 find %{buildroot} -name "*.la" -delete
 
 # remove unneeded static library
-rm %{buildroot}%{_libdir}/libgnomesoftware.a
+#rm %{buildroot}%{_libdir}/libgnomesoftware.a
 
 desktop-file-validate %{buildroot}%{_datadir}/applications/*.desktop
 
@@ -120,12 +126,7 @@ FOE
 %{_datadir}/applications/*.desktop
 %dir %{_datadir}/%{name}/
 %{_datadir}/%{name}/*.png
-%{_datadir}/%{name}/*.svg
-%{_datadir}/gnome-software/featured-*.svg
-%{_datadir}/gnome-software/featured-*.jpg
-#{_datadir}/%{name}/featured.ini
-#dir #{_datadir}/%{name}/modulesets.d/
-#{_datadir}/%{name}/modulesets.d/*.xml
+%{_iconsdir}/*/*/*/carousel-*.svg
 %{_mandir}/man1/%{name}.1.*
 %{_iconsdir}/*/*/apps/*
 %{_iconsdir}/hicolor/scalable/status/software-installed-symbolic.svg
@@ -137,14 +138,14 @@ FOE
 %{_datadir}/glib-2.0/schemas/org.gnome.software.gschema.xml
 %{_datadir}/glib-2.0/schemas/org.gnome.software-openmandriva.gschema.override
 %{_datadir}/gnome-shell/search-providers/*-search-provider.ini
-%dir %{_libdir}/gs-plugins-*/
-%{_libdir}/gs-plugins-*/*.so
 %{_libexecdir}/gnome-software-cmd
 %{_libexecdir}/gnome-software-restarter
 #{_datadir}/metainfo/org.gnome.Software.Plugin.Epiphany.metainfo.xml
 %{_datadir}/metainfo/org.gnome.Software.Plugin.Flatpak.metainfo.xml
 %{_datadir}/metainfo/org.gnome.Software.Plugin.Odrs.metainfo.xml
 %{_datadir}/app-info/xmls/org.gnome.Software.Featured.xml
+%{_libdir}/%{name}/libgnomesoftware.so
+%{_libdir}/%{name}/plugins-%{plugin_major}/libgs_plugin_*.so
 
 %files devel
 %{_libdir}/pkgconfig/gnome-software.pc
