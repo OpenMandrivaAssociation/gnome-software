@@ -26,6 +26,7 @@ BuildRequires:	pkgconfig(appstream-glib) >= 0.2.4
 BuildRequires:	pkgconfig(gio-unix-2.0)
 BuildRequires:	pkgconfig(gtk+-3.0) >= 3.9.12
 BuildRequires:	pkgconfig(sqlite3)
+BuildRequires:	pkgconfig(libhandy-1)
 BuildRequires:	pkgconfig(libnotify)
 BuildRequires:	pkgconfig(packagekit-glib2) >= 1.0.0
 BuildRequires:	pkgconfig(libsoup-2.4)
