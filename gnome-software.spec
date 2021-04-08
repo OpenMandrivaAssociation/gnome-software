@@ -123,9 +123,9 @@ FOE
 %{_datadir}/applications/*.desktop
 %dir %{_datadir}/%{name}/
 %{_datadir}/%{name}/*.png
-%{_datadir}/%{name}/*.svg
-%{_datadir}/gnome-software/featured-*.svg
-%{_datadir}/gnome-software/featured-*.jpg
+#{_datadir}/%{name}/*.svg
+#{_datadir}/gnome-software/featured-*.svg
+#{_datadir}/gnome-software/featured-*.jpg
 #{_datadir}/%{name}/featured.ini
 #dir #{_datadir}/%{name}/modulesets.d/
 #{_datadir}/%{name}/modulesets.d/*.xml
@@ -140,8 +140,8 @@ FOE
 %{_datadir}/glib-2.0/schemas/org.gnome.software.gschema.xml
 %{_datadir}/glib-2.0/schemas/org.gnome.software-openmandriva.gschema.override
 %{_datadir}/gnome-shell/search-providers/*-search-provider.ini
-%dir %{_libdir}/gs-plugins-*/
-%{_libdir}/gs-plugins-*/*.so
+#dir #{_libdir}/gs-plugins-*/
+#{_libdir}/gs-plugins-*/*.so
 %{_libexecdir}/gnome-software-cmd
 %{_libexecdir}/gnome-software-restarter
 #{_datadir}/metainfo/org.gnome.Software.Plugin.Epiphany.metainfo.xml
