@@ -10,7 +10,7 @@
 
 Summary:	A software center for GNOME
 Name:		gnome-software
-Version:	40.1
+Version:	40.2
 Release:	1
 License:	GPLv2+
 Group:		Graphical desktop/GNOME
