@@ -10,7 +10,7 @@
 
 Summary:	A software center for GNOME
 Name:		gnome-software
-Version:	40.4
+Version:	41.0
 Release:	1
 License:	GPLv2+
 Group:		Graphical desktop/GNOME
@@ -130,6 +130,7 @@ FOE
 %{_mandir}/man1/%{name}.1.*
 %{_iconsdir}/*/*/apps/*
 %{_iconsdir}/hicolor/scalable/status/software-installed-symbolic.svg
+%{_iconsdir}/hicolor/scalable/actions/app-remove-symbolic.svg
 %{_datadir}/metainfo/org.gnome.Software.appdata.xml
 %{_datadir}/metainfo/org.gnome.Software.Plugin.Fwupd.metainfo.xml
 %{_sysconfdir}/xdg/autostart/%{name}-service.desktop
@@ -142,8 +143,9 @@ FOE
 %{_libexecdir}/gnome-software-restarter
 #{_datadir}/metainfo/org.gnome.Software.Plugin.Epiphany.metainfo.xml
 %{_datadir}/metainfo/org.gnome.Software.Plugin.Flatpak.metainfo.xml
-%{_datadir}/metainfo/org.gnome.Software.Plugin.Odrs.metainfo.xml
+#{_datadir}/metainfo/org.gnome.Software.Plugin.Odrs.metainfo.xml
 %{_datadir}/app-info/xmls/org.gnome.Software.Featured.xml
+%{_libdir}/gnome-software/libgnomesoftware.so.%{plugin_major}
 %{_libdir}/%{name}/libgnomesoftware.so
 %{_libdir}/%{name}/plugins-%{plugin_major}/libgs_plugin_*.so
 
