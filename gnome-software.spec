@@ -142,7 +142,7 @@ FOE
 %{_libexecdir}/gnome-software-restarter
 #{_datadir}/metainfo/org.gnome.Software.Plugin.Epiphany.metainfo.xml
 %{_datadir}/metainfo/org.gnome.Software.Plugin.Flatpak.metainfo.xml
-%{_datadir}/metainfo/org.gnome.Software.Plugin.Odrs.metainfo.xml
+#{_datadir}/metainfo/org.gnome.Software.Plugin.Odrs.metainfo.xml
 %{_datadir}/app-info/xmls/org.gnome.Software.Featured.xml
 %{_libdir}/%{name}/libgnomesoftware.so
 %{_libdir}/%{name}/plugins-%{plugin_major}/libgs_plugin_*.so
