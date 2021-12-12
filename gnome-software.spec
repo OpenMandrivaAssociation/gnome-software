@@ -92,7 +92,7 @@ export CXX=g++
 	-Dgsettings_desktop_schemas=enabled \
 	-Dpackagekit=true \
 	-Dflatpak=true \
-	-Drpm_ostree=true \
+#	-Drpm_ostree=true \
 	-Dgudev=true \
 	-Dfwupd=true
 %meson_build
