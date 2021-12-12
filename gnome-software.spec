@@ -88,16 +88,12 @@ export CXX=g++
 
 %meson		\
 	-Dmalcontent=false \
-	-Denable-polkit=true \
-	-Denable-gnome-desktop=true \
+	-Dpolkit=true \
 	-Dgsettings_desktop_schemas=enabled \
-	-Denable-packagekit=true \
-	-Denable-flatpak=true \
-	-Denable-ostree=true \
-	-Denable-rpm=true \
-	-Denable-shell-extensions=true \
-	-Denable-gudev=true \
-	-Denable-webapps=true \
+	-Dpackagekit=true \
+	-Dflatpak=true \
+	-Drpm_ostree=true \
+	-Dgudev=true \
 	-Dfwupd=true
 %meson_build
 
