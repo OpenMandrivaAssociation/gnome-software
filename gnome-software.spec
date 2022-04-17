@@ -121,9 +121,9 @@ FOE
 %doc AUTHORS COPYING NEWS README.md
 %{_bindir}/%{name}
 %{_datadir}/applications/*.desktop
-%dir %{_datadir}/%{name}/
-%{_datadir}/%{name}/*.png
-%{_iconsdir}/*/*/*/carousel-*.svg
+#dir #{_datadir}/%{name}/
+#{_datadir}/%{name}/*.png
+#{_iconsdir}/*/*/*/carousel-*.svg
 %{_mandir}/man1/%{name}.1.*
 %{_iconsdir}/*/*/apps/*
 %{_iconsdir}/hicolor/scalable/status/software-installed-symbolic.svg
