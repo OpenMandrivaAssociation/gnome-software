@@ -3,14 +3,14 @@
 # don't provide plugin .so
 %global __provides_exclude_from %{_libdir}/gs-plugins-3/.*\\.so
 
-%global plugin_major 16
+%global plugin_major 17
 
 #define _disable_ld_no_undefined 1
 #define _disable_lto 1
 
 Summary:	A software center for GNOME
 Name:		gnome-software
-Version:	41.4
+Version:	42.0
 Release:	1
 License:	GPLv2+
 Group:		Graphical desktop/GNOME
@@ -26,10 +26,10 @@ BuildRequires:	desktop-file-utils
 BuildRequires:	pkgconfig(appstream)
 BuildRequires:	pkgconfig(appstream-glib) >= 0.2.4
 BuildRequires:	pkgconfig(gio-unix-2.0)
-BuildRequires:	pkgconfig(gtk+-3.0) >= 3.9.12
+BuildRequires:	pkgconfig(gtk4)
 BuildRequires:	pkgconfig(sqlite3)
 BuildRequires:	pkgconfig(libdnf)
-BuildRequires:	pkgconfig(libhandy-1)
+BuildRequires:	pkgconfig(libadwaita-1)
 BuildRequires:	pkgconfig(libnotify)
 BuildRequires:	pkgconfig(packagekit-glib2) >= 1.0.0
 BuildRequires:	pkgconfig(libsoup-2.4)
@@ -91,8 +91,10 @@ export CXX=g++
 	-Dpolkit=true \
 	-Dgsettings_desktop_schemas=enabled \
 	-Dpackagekit=true \
+	-Dpackagekit_autoremove=true \
 	-Dflatpak=true \
 	-Dgudev=true \
+	-Dsoup2=true \
 	-Dfwupd=true
 %meson_build
 
@@ -128,7 +130,7 @@ FOE
 %{_iconsdir}/hicolor/scalable/actions/app-remove-symbolic.svg
 %{_datadir}/metainfo/org.gnome.Software.appdata.xml
 %{_datadir}/metainfo/org.gnome.Software.Plugin.Fwupd.metainfo.xml
-%{_sysconfdir}/xdg/autostart/%{name}-service.desktop
+%{_sysconfdir}/xdg/autostart/org.gnome.Software.desktop
 %{_datadir}/dbus-1/services/org.gnome.Software.service
 %{_datadir}/dbus-1/services/org.freedesktop.PackageKit.service
 %{_datadir}/glib-2.0/schemas/org.gnome.software.gschema.xml
@@ -140,6 +142,7 @@ FOE
 %{_datadir}/metainfo/org.gnome.Software.Plugin.Flatpak.metainfo.xml
 #{_datadir}/metainfo/org.gnome.Software.Plugin.Odrs.metainfo.xml
 %{_datadir}/app-info/xmls/org.gnome.Software.Featured.xml
+%{_datadir}/app-info/xmls/org.gnome.Software.Popular.xml
 %{_libdir}/gnome-software/libgnomesoftware.so.%{plugin_major}
 %{_libdir}/%{name}/libgnomesoftware.so
 %{_libdir}/%{name}/plugins-%{plugin_major}/libgs_plugin_*.so
