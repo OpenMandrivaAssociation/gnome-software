@@ -121,9 +121,6 @@ FOE
 %doc AUTHORS COPYING NEWS README.md
 %{_bindir}/%{name}
 %{_datadir}/applications/*.desktop
-#dir #{_datadir}/%{name}/
-#{_datadir}/%{name}/*.png
-#{_iconsdir}/*/*/*/carousel-*.svg
 %{_mandir}/man1/%{name}.1.*
 %{_iconsdir}/*/*/apps/*
 %{_iconsdir}/hicolor/scalable/status/software-installed-symbolic.svg
@@ -138,11 +135,9 @@ FOE
 %{_datadir}/gnome-shell/search-providers/*-search-provider.ini
 %{_libexecdir}/gnome-software-cmd
 %{_libexecdir}/gnome-software-restarter
-#{_datadir}/metainfo/org.gnome.Software.Plugin.Epiphany.metainfo.xml
 %{_datadir}/metainfo/org.gnome.Software.Plugin.Flatpak.metainfo.xml
-#{_datadir}/metainfo/org.gnome.Software.Plugin.Odrs.metainfo.xml
-#{_datadir}/app-info/xmls/org.gnome.Software.Featured.xml
-#{_datadir}/app-info/xmls/org.gnome.Software.Popular.xml
+%{_datadir}/swcatalog/xml/org.gnome.Software.Featured.xml
+%{_datadir}/swcatalog/xml/org.gnome.Software.Popular.xml
 %{_libdir}/gnome-software/libgnomesoftware.so.%{plugin_major}
 %{_libdir}/%{name}/libgnomesoftware.so
 %{_libdir}/%{name}/plugins-%{plugin_major}/libgs_plugin_*.so
