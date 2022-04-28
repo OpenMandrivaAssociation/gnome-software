@@ -3,7 +3,7 @@
 # don't provide plugin .so
 %global __provides_exclude_from %{_libdir}/gs-plugins-3/.*\\.so
 
-%global plugin_major 17
+%global plugin_major 18
 
 #define _disable_ld_no_undefined 1
 #define _disable_lto 1
@@ -141,8 +141,8 @@ FOE
 #{_datadir}/metainfo/org.gnome.Software.Plugin.Epiphany.metainfo.xml
 %{_datadir}/metainfo/org.gnome.Software.Plugin.Flatpak.metainfo.xml
 #{_datadir}/metainfo/org.gnome.Software.Plugin.Odrs.metainfo.xml
-%{_datadir}/app-info/xmls/org.gnome.Software.Featured.xml
-%{_datadir}/app-info/xmls/org.gnome.Software.Popular.xml
+#{_datadir}/app-info/xmls/org.gnome.Software.Featured.xml
+#{_datadir}/app-info/xmls/org.gnome.Software.Popular.xml
 %{_libdir}/gnome-software/libgnomesoftware.so.%{plugin_major}
 %{_libdir}/%{name}/libgnomesoftware.so
 %{_libdir}/%{name}/plugins-%{plugin_major}/libgs_plugin_*.so
