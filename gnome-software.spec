@@ -78,7 +78,7 @@ the source tree. Most users do not need this subpackage installed.
 
 
 %prep
-%setup -q
+%autosetup -p1
 
 %build
 # with clang gnome-software dont want launch.
