@@ -33,6 +33,7 @@ BuildRequires:	pkgconfig(appstream)
 BuildRequires:	pkgconfig(appstream-glib) >= 0.2.4
 BuildRequires:	pkgconfig(gio-unix-2.0)
 BuildRequires:	pkgconfig(gtk4)
+BuildRequires:	pkgconfig(glib-testing-0)
 BuildRequires:	pkgconfig(sqlite3)
 BuildRequires:	pkgconfig(libdnf)
 BuildRequires:	pkgconfig(libadwaita-1)
