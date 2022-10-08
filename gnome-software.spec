@@ -3,19 +3,25 @@
 # don't provide plugin .so
 %global __provides_exclude_from %{_libdir}/gs-plugins-3/.*\\.so
 
-%global plugin_major 18
+%global plugin_major 19
 
 #define _disable_ld_no_undefined 1
 #define _disable_lto 1
 
 Summary:	A software center for GNOME
 Name:		gnome-software
-Version:	42.4
+Version:	43.0
 Release:	1
 License:	GPLv2+
 Group:		Graphical desktop/GNOME
 URL:		https://wiki.gnome.org/Apps/Software
 Source0:	https://download.gnome.org/sources/%{name}/%{url_ver}/%{name}-%{version}.tar.xz
+
+	
+Patch01:   0001-crash-with-broken-theme.patch
+Patch02:   0002-install-rpm-file.patch
+
+BuildRequires:	appstream
 BuildRequires:	cmake
 BuildRequires:	gettext
 BuildRequires:	gtk-doc
@@ -27,6 +33,7 @@ BuildRequires:	pkgconfig(appstream)
 BuildRequires:	pkgconfig(appstream-glib) >= 0.2.4
 BuildRequires:	pkgconfig(gio-unix-2.0)
 BuildRequires:	pkgconfig(gtk4)
+BuildRequires:	pkgconfig(glib-testing-0)
 BuildRequires:	pkgconfig(sqlite3)
 BuildRequires:	pkgconfig(libdnf)
 BuildRequires:	pkgconfig(libadwaita-1)
@@ -72,7 +79,7 @@ the source tree. Most users do not need this subpackage installed.
 
 
 %prep
-%setup -q
+%autosetup -p1
 
 %build
 # with clang gnome-software dont want launch.
@@ -92,6 +99,7 @@ export CXX=g++
 	-Dgsettings_desktop_schemas=enabled \
 	-Dpackagekit=true \
 	-Dpackagekit_autoremove=true \
+	-Drpm_ostree=false \
 	-Dflatpak=true \
 	-Dgudev=true \
 	-Dsoup2=true \
@@ -123,10 +131,10 @@ FOE
 %{_datadir}/applications/*.desktop
 %{_mandir}/man1/%{name}.1.*
 %{_iconsdir}/*/*/apps/*
-%{_iconsdir}/hicolor/scalable/status/software-installed-symbolic.svg
 %{_iconsdir}/hicolor/scalable/actions/app-remove-symbolic.svg
-%{_datadir}/metainfo/org.gnome.Software.appdata.xml
 %{_datadir}/metainfo/org.gnome.Software.Plugin.Fwupd.metainfo.xml
+%{_datadir}/metainfo/org.gnome.Software.Plugin.Epiphany.metainfo.xml
+%{_datadir}/metainfo/org.gnome.Software.metainfo.xml
 %{_sysconfdir}/xdg/autostart/org.gnome.Software.desktop
 %{_datadir}/dbus-1/services/org.gnome.Software.service
 %{_datadir}/dbus-1/services/org.freedesktop.PackageKit.service
@@ -137,7 +145,9 @@ FOE
 %{_libexecdir}/gnome-software-restarter
 %{_datadir}/metainfo/org.gnome.Software.Plugin.Flatpak.metainfo.xml
 %{_datadir}/swcatalog/xml/org.gnome.Software.Featured.xml
-%{_datadir}/swcatalog/xml/org.gnome.Software.Popular.xml
+%{_datadir}/swcatalog/xml/gnome-pwa-list-foss.xml
+%{_datadir}/swcatalog/xml/gnome-pwa-list-proprietary.xml
+%{_datadir}/swcatalog/xml/org.gnome.Software.Curated.xml
 %{_libdir}/gnome-software/libgnomesoftware.so.%{plugin_major}
 %{_libdir}/%{name}/libgnomesoftware.so
 %{_libdir}/%{name}/plugins-%{plugin_major}/libgs_plugin_*.so
