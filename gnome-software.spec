@@ -131,10 +131,10 @@ FOE
 %{_datadir}/applications/*.desktop
 %{_mandir}/man1/%{name}.1.*
 %{_iconsdir}/*/*/apps/*
-#{_iconsdir}/hicolor/scalable/status/software-installed-symbolic.svg
 %{_iconsdir}/hicolor/scalable/actions/app-remove-symbolic.svg
-#{_datadir}/metainfo/org.gnome.Software.appdata.xml
 %{_datadir}/metainfo/org.gnome.Software.Plugin.Fwupd.metainfo.xml
+%{_datadir}/metainfo/org.gnome.Software.Plugin.Epiphany.metainfo.xml
+%{_datadir}/metainfo/org.gnome.Software.metainfo.xml
 %{_sysconfdir}/xdg/autostart/org.gnome.Software.desktop
 %{_datadir}/dbus-1/services/org.gnome.Software.service
 %{_datadir}/dbus-1/services/org.freedesktop.PackageKit.service
@@ -145,7 +145,9 @@ FOE
 %{_libexecdir}/gnome-software-restarter
 %{_datadir}/metainfo/org.gnome.Software.Plugin.Flatpak.metainfo.xml
 %{_datadir}/swcatalog/xml/org.gnome.Software.Featured.xml
-#{_datadir}/swcatalog/xml/org.gnome.Software.Popular.xml
+%{_datadir}/swcatalog/xml/gnome-pwa-list-foss.xml
+%{_datadir}/swcatalog/xml/gnome-pwa-list-proprietary.xml
+%{_datadir}/swcatalog/xml/org.gnome.Software.Curated.xml
 %{_libdir}/gnome-software/libgnomesoftware.so.%{plugin_major}
 %{_libdir}/%{name}/libgnomesoftware.so
 %{_libdir}/%{name}/plugins-%{plugin_major}/libgs_plugin_*.so
