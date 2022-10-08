@@ -16,6 +16,12 @@ License:	GPLv2+
 Group:		Graphical desktop/GNOME
 URL:		https://wiki.gnome.org/Apps/Software
 Source0:	https://download.gnome.org/sources/%{name}/%{url_ver}/%{name}-%{version}.tar.xz
+
+	
+Patch01:   0001-crash-with-broken-theme.patch
+Patch02:   0002-install-rpm-file.patch
+
+BuildRequires:	appstream
 BuildRequires:	cmake
 BuildRequires:	gettext
 BuildRequires:	gtk-doc
@@ -92,6 +98,7 @@ export CXX=g++
 	-Dgsettings_desktop_schemas=enabled \
 	-Dpackagekit=true \
 	-Dpackagekit_autoremove=true \
+	-Drpm_ostree=false \
 	-Dflatpak=true \
 	-Dgudev=true \
 	-Dsoup2=true \
