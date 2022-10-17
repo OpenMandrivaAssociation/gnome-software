@@ -11,7 +11,7 @@
 Summary:	A software center for GNOME
 Name:		gnome-software
 Version:	43.0
-Release:	1
+Release:	2
 License:	GPLv2+
 Group:		Graphical desktop/GNOME
 URL:		https://wiki.gnome.org/Apps/Software
@@ -39,7 +39,7 @@ BuildRequires:	pkgconfig(libdnf)
 BuildRequires:	pkgconfig(libadwaita-1)
 BuildRequires:	pkgconfig(libnotify)
 BuildRequires:	pkgconfig(packagekit-glib2) >= 1.0.0
-BuildRequires:	pkgconfig(libsoup-2.4)
+BuildRequires:	pkgconfig(libsoup-3.0)
 BuildRequires:	pkgconfig(gsettings-desktop-schemas) >= 3.11.4
 BuildRequires:	pkgconfig(gnome-desktop-3.0)
 BuildRequires:	pkgconfig(polkit-gobject-1)
@@ -102,7 +102,7 @@ export CXX=g++
 	-Drpm_ostree=false \
 	-Dflatpak=true \
 	-Dgudev=true \
-	-Dsoup2=true \
+	-Dsoup2=false \
 	-Dfwupd=true
 %meson_build
 
