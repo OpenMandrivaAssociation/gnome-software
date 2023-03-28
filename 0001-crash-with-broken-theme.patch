@@ -1,25 +1,20 @@
-Subject: [PATCH] gs-feature-tile: Do not abort when the theme is broken
-
-Just print a warning when the theme doesn't provide 'theme_fg_color' and
-fallback to black color.
-
-Closes https://gitlab.gnome.org/GNOME/gnome-software/-/issues/1228
-
-diff -up gnome-software-42.rc/src/gs-feature-tile.c.1 gnome-software-42.rc/src/gs-feature-tile.c
---- gnome-software-42.rc/src/gs-feature-tile.c.1	2022-03-04 16:23:58.566735700 +0100
-+++ gnome-software-42.rc/src/gs-feature-tile.c	2022-03-07 08:06:29.046595524 +0100
-@@ -411,7 +411,6 @@ gs_feature_tile_refresh (GsAppTile *self
+diff -up gnome-software-devel/src/gs-feature-tile.c.1 gnome-software-devel/src/gs-feature-tile.c
+--- gnome-software-devel/src/gs-feature-tile.c.1	2023-01-02 17:08:54.157641969 +0100
++++ gnome-software-devel/src/gs-feature-tile.c	2023-01-02 17:09:36.881632780 +0100
+@@ -397,9 +397,6 @@ gs_feature_tile_refresh (GsAppTile *self
  		if (key_colors != tile->key_colors_cache) {
  			g_autoptr(GArray) colors = NULL;
  			GdkRGBA fg_rgba;
+-#if !GTK_CHECK_VERSION(4, 9, 2)
 -			gboolean fg_rgba_valid;
+-#endif
  			GsHSBC fg_hsbc;
  			const GsHSBC *chosen_hsbc;
  			GsHSBC chosen_hsbc_modified;
-@@ -429,8 +428,17 @@ gs_feature_tile_refresh (GsAppTile *self
- 			 * @min_abs_contrast contrast with the foreground, so
- 			 * that the text is legible.
- 			 */
+@@ -424,8 +421,17 @@ gs_feature_tile_refresh (GsAppTile *self
+ 			gtk_widget_get_color (GTK_WIDGET (self), &fg_rgba);
+ #else
+ 			context = gtk_widget_get_style_context (GTK_WIDGET (self));
 -			fg_rgba_valid = gtk_style_context_lookup_color (context, "theme_fg_color", &fg_rgba);
 -			g_assert (fg_rgba_valid);
 +			if (!gtk_style_context_lookup_color (context, "theme_fg_color", &fg_rgba)) {
@@ -33,6 +28,6 @@ diff -up gnome-software-42.rc/src/gs-feature-tile.c.1 gnome-software-42.rc/src/g
 +				fg_rgba.blue = 0.0;
 +				fg_rgba.alpha = 1.0;
 +			}
+ #endif
  
  			gtk_rgb_to_hsv (fg_rgba.red, fg_rgba.green, fg_rgba.blue,
- 					&fg_hsbc.hue, &fg_hsbc.saturation, &fg_hsbc.brightness);
