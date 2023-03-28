@@ -3,14 +3,14 @@
 # don't provide plugin .so
 %global __provides_exclude_from %{_libdir}/gs-plugins-3/.*\\.so
 
-%global plugin_major 19
+%global plugin_major 20
 
 #define _disable_ld_no_undefined 1
 #define _disable_lto 1
 
 Summary:	A software center for GNOME
 Name:		gnome-software
-Version:	43.5
+Version:	44.0
 Release:	1
 License:	GPLv2+
 Group:		Graphical desktop/GNOME
@@ -86,7 +86,7 @@ export CC=gcc
 export CXX=g++
 
 # Fix build error on GCC after linker switch to LDD.
-%global ldflags %{ldflags} -fuse-ld=gold
+#global ldflags %{ldflags} -fuse-ld=gold
 # Fix build error at i686 with gcc and gold. 
 %ifarch %{ix86}
 %global ldflags %{ldflags} -Wl,-z,notext
