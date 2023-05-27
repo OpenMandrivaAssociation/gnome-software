@@ -30,7 +30,7 @@ BuildRequires:	docbook-style-xsl
 BuildRequires:	desktop-file-utils
 BuildRequires:	pkgconfig(appstream)
 BuildRequires:	pkgconfig(appstream-glib) >= 0.2.4
-BuildRequires:	pkgconfig(gio-unix-2.0)
+BuildRequires:	pkgconfig(gio-unix-2.0) = 2.76.2-1
 BuildRequires:	pkgconfig(gtk4)
 BuildRequires:	pkgconfig(glib-testing-0)
 BuildRequires:	pkgconfig(sqlite3)
