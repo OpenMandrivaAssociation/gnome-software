@@ -20,7 +20,7 @@ Source0:	https://download.gnome.org/sources/%{name}/%{url_ver}/%{name}-%{version
 	
 Patch01:   0001-crash-with-broken-theme.patch
 
-BuildRequires:	appstream
+BuildRequires:	appstream = 0.16.1-2
 BuildRequires:	cmake
 BuildRequires:	gettext
 BuildRequires:	gtk-doc
@@ -28,7 +28,7 @@ BuildRequires:	intltool
 BuildRequires:	xsltproc
 BuildRequires:	docbook-style-xsl
 BuildRequires:	desktop-file-utils
-BuildRequires:	pkgconfig(appstream)
+BuildRequires:	pkgconfig(appstream) = 0.16.1-2
 BuildRequires:	pkgconfig(appstream-glib) >= 0.2.4
 BuildRequires:	pkgconfig(gio-unix-2.0)
 BuildRequires:	pkgconfig(gtk4)
