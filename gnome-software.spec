@@ -82,12 +82,10 @@ the source tree. Most users do not need this subpackage installed.
 
 %build
 # with clang gnome-software dont want launch.
-export CC=gcc
-export CXX=g++
+#export CC=gcc
+#export CXX=g++
 
-# Fix build error on GCC after linker switch to LDD.
-#global ldflags %{ldflags} -fuse-ld=gold
-# Fix build error at i686 with gcc and gold. 
+
 %ifarch %{ix86}
 %global ldflags %{ldflags} -Wl,-z,notext
 %endif
