@@ -21,6 +21,7 @@ Source0:	https://download.gnome.org/sources/%{name}/%{url_ver}/%{name}-%{version
 Patch01:   0001-crash-with-broken-theme.patch
 
 BuildRequires:	appstream
+BuildConflict:	cmake(AppStreamQt)= 1.0.0
 BuildRequires:	cmake
 BuildRequires:	gettext
 BuildRequires:	gtk-doc
