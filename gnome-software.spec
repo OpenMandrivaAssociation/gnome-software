@@ -10,7 +10,7 @@
 
 Summary:	A software center for GNOME
 Name:		gnome-software
-Version:	44.2
+Version:	44.3
 Release:	1
 License:	GPLv2+
 Group:		Graphical desktop/GNOME
@@ -29,7 +29,7 @@ BuildRequires:	intltool
 BuildRequires:	xsltproc
 BuildRequires:	docbook-style-xsl
 BuildRequires:	desktop-file-utils
-BuildRequires:	pkgconfig(appstream)
+BuildRequires:	pkgconfig(appstream) = 0.16.2
 BuildRequires:	pkgconfig(appstream-glib) >= 0.2.4
 BuildRequires:	pkgconfig(gio-unix-2.0)
 BuildRequires:	pkgconfig(gtk4)
