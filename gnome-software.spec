@@ -10,15 +10,13 @@
 
 Summary:	A software center for GNOME
 Name:		gnome-software
-Version:	44.4
+Version:	45.0
 Release:	1
 License:	GPLv2+
 Group:		Graphical desktop/GNOME
 URL:		https://wiki.gnome.org/Apps/Software
 Source0:	https://download.gnome.org/sources/%{name}/%{url_ver}/%{name}-%{version}.tar.xz
 
-	
-Patch01:   0001-crash-with-broken-theme.patch
 
 BuildRequires:	appstream < 1.0.0
 BuildRequires:	appstream = 0.16.2
