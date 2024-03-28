@@ -19,7 +19,7 @@ Source0:	https://download.gnome.org/sources/%{name}/%{url_ver}/%{name}-%{version
 
 
 BuildRequires:	appstream < 1.0.0
-BuildRequires:	appstream = 0.16.3
+BuildRequires:	appstream = 0.16.4
 BuildRequires:	cmake
 BuildRequires:	gettext
 BuildRequires:	gtk-doc
