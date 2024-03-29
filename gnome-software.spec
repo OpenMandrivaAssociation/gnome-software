@@ -146,6 +146,7 @@ FOE
 %{_datadir}/swcatalog/xml/gnome-pwa-list-foss.xml
 %{_datadir}/swcatalog/xml/gnome-pwa-list-proprietary.xml
 %{_datadir}/swcatalog/xml/org.gnome.Software.Curated.xml
+%{_datadir}/bash-completion/completions/gnome-software
 %{_libdir}/gnome-software/libgnomesoftware.so.%{plugin_major}
 %{_libdir}/%{name}/libgnomesoftware.so
 %{_libdir}/%{name}/plugins-%{plugin_major}/libgs_plugin_*.so
