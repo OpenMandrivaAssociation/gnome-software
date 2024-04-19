@@ -11,7 +11,7 @@
 Summary:	A software center for GNOME
 Name:		gnome-software
 Version:	46.0
-Release:	2
+Release:	3
 License:	GPLv2+
 Group:		Graphical desktop/GNOME
 URL:		https://wiki.gnome.org/Apps/Software
@@ -61,6 +61,8 @@ Requires:	adwaita-icon-theme
 #Requires:	gnome-packagekit
 Requires:	flatpak
 Requires:	fwupd
+
+Provides:	packagekit-gui
 
 
 %description
