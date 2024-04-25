@@ -10,8 +10,8 @@
 
 Summary:	A software center for GNOME
 Name:		gnome-software
-Version:	46.0
-Release:	3
+Version:	46.1
+Release:	1
 License:	GPLv2+
 Group:		Graphical desktop/GNOME
 URL:		https://wiki.gnome.org/Apps/Software
