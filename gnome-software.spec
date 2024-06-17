@@ -11,15 +11,14 @@
 Summary:	A software center for GNOME
 Name:		gnome-software
 Version:	46.2
-Release:	1
+Release:	2
 License:	GPLv2+
 Group:		Graphical desktop/GNOME
 URL:		https://wiki.gnome.org/Apps/Software
 Source0:	https://download.gnome.org/sources/%{name}/%{url_ver}/%{name}-%{version}.tar.xz
 
 
-BuildRequires:	appstream < 1.0.0
-BuildRequires:	appstream = 0.16.4
+BuildRequires:	appstream >= 1.0.3
 BuildRequires:	cmake
 BuildRequires:	gettext
 BuildRequires:	gtk-doc
@@ -27,7 +26,7 @@ BuildRequires:	intltool
 BuildRequires:	xsltproc
 BuildRequires:	docbook-style-xsl
 BuildRequires:	desktop-file-utils
-BuildRequires:	pkgconfig(appstream) = 0.16.4
+BuildRequires:	pkgconfig(appstream) >= 1.0.3
 BuildRequires:	pkgconfig(appstream-glib) >= 0.2.4
 BuildRequires:	pkgconfig(gio-unix-2.0)
 BuildRequires:	pkgconfig(gtk4)
