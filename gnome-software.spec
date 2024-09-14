@@ -23,6 +23,7 @@ BuildRequires:	cmake
 BuildRequires:	gettext
 BuildRequires:	gtk-doc
 BuildRequires:	intltool
+BuildRequires:	itstool
 BuildRequires:	xsltproc
 BuildRequires:	docbook-style-xsl
 BuildRequires:	desktop-file-utils
