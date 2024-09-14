@@ -96,7 +96,7 @@ export CXX=g++
 %meson		\
 	-Dmalcontent=false \
 	-Dpolkit=true \
-	-Dgsettings_desktop_schemas=enabled \
+ 	-Ddkms=true \
 	-Dpackagekit=true \
 	-Dpackagekit_autoremove=true \
 	-Drpm_ostree=false \
