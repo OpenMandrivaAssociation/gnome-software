@@ -3,7 +3,7 @@
 # don't provide plugin .so
 %global __provides_exclude_from %{_libdir}/gs-plugins-3/.*\\.so
 
-%global plugin_major 20
+%global plugin_major 21
 
 #define _disable_ld_no_undefined 1
 #define _disable_lto 1
@@ -132,7 +132,6 @@ FOE
 %{_datadir}/applications/*.desktop
 %{_mandir}/man1/%{name}.1.*
 %{_iconsdir}/*/*/apps/*
-%{_iconsdir}/hicolor/scalable/actions/app-remove-symbolic.svg
 %{_datadir}/metainfo/org.gnome.Software.Plugin.Fwupd.metainfo.xml
 %{_datadir}/metainfo/org.gnome.Software.Plugin.Epiphany.metainfo.xml
 %{_datadir}/metainfo/org.gnome.Software.metainfo.xml
@@ -145,10 +144,8 @@ FOE
 %{_libexecdir}/gnome-software-cmd
 %{_libexecdir}/gnome-software-restarter
 %{_datadir}/metainfo/org.gnome.Software.Plugin.Flatpak.metainfo.xml
-%{_datadir}/swcatalog/xml/org.gnome.Software.Featured.xml
 %{_datadir}/swcatalog/xml/gnome-pwa-list-foss.xml
 %{_datadir}/swcatalog/xml/gnome-pwa-list-proprietary.xml
-%{_datadir}/swcatalog/xml/org.gnome.Software.Curated.xml
 %{_datadir}/bash-completion/completions/gnome-software
 %{_libdir}/gnome-software/libgnomesoftware.so.%{plugin_major}
 %{_libdir}/%{name}/libgnomesoftware.so
