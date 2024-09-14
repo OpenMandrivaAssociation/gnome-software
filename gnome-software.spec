@@ -132,6 +132,7 @@ FOE
 %{_datadir}/applications/*.desktop
 %{_mandir}/man1/%{name}.1.*
 %{_iconsdir}/*/*/apps/*
+%{_iconsdir}/hicolor/scalable/categories/system-component*
 %{_datadir}/metainfo/org.gnome.Software.Plugin.Fwupd.metainfo.xml
 %{_datadir}/metainfo/org.gnome.Software.Plugin.Epiphany.metainfo.xml
 %{_datadir}/metainfo/org.gnome.Software.metainfo.xml
@@ -141,8 +142,10 @@ FOE
 %{_datadir}/glib-2.0/schemas/org.gnome.software.gschema.xml
 %{_datadir}/glib-2.0/schemas/org.gnome.software-openmandriva.gschema.override
 %{_datadir}/gnome-shell/search-providers/*-search-provider.ini
+%{_datadir}/polkit-1/actions/org.gnome.software.dkms-helper.policy
 %{_libexecdir}/gnome-software-cmd
 %{_libexecdir}/gnome-software-restarter
+%{_libexecdir}/gnome-software-dkms-helper
 %{_datadir}/metainfo/org.gnome.Software.Plugin.Flatpak.metainfo.xml
 %{_datadir}/swcatalog/xml/gnome-pwa-list-foss.xml
 %{_datadir}/swcatalog/xml/gnome-pwa-list-proprietary.xml
