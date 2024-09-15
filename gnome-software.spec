@@ -11,7 +11,7 @@
 Summary:	A software center for GNOME
 Name:		gnome-software
 Version:	47.0
-Release:	1
+Release:	2
 License:	GPLv2+
 Group:		Graphical desktop/GNOME
 URL:		https://wiki.gnome.org/Apps/Software
@@ -104,7 +104,9 @@ export CXX=g++
 	-Dflatpak=true \
 	-Dgudev=true \
 	-Dsoup2=false \
-	-Dfwupd=true
+	-Dfwupd=true \
+ 	-Dhardcoded_curated=true \
+  	-Ddefault_featured_apps=true
 %meson_build
 
 %install
