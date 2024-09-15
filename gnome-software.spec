@@ -145,6 +145,8 @@ FOE
 %{_datadir}/glib-2.0/schemas/org.gnome.software-openmandriva.gschema.override
 %{_datadir}/gnome-shell/search-providers/*-search-provider.ini
 %{_datadir}/polkit-1/actions/org.gnome.software.dkms-helper.policy
+%{_datadir}/swcatalog/xml/org.gnome.Software.Curated.xml
+%{_datadir}/swcatalog/xml/org.gnome.Software.Featured.xml
 %{_libexecdir}/gnome-software-cmd
 %{_libexecdir}/gnome-software-restarter
 %{_libexecdir}/gnome-software-dkms-helper
