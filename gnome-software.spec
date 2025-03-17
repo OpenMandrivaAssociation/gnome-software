@@ -3,7 +3,7 @@
 # don't provide plugin .so
 %global __provides_exclude_from %{_libdir}/gs-plugins-3/.*\\.so
 
-%global plugin_major 21
+%global plugin_major 22
 
 #define _disable_ld_no_undefined 1
 #define _disable_lto 1
