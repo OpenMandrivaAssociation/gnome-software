@@ -103,7 +103,6 @@ export CXX=g++
 	-Drpm_ostree=false \
 	-Dflatpak=true \
 	-Dgudev=true \
-	-Dsoup2=false \
 	-Dfwupd=true \
  	-Dhardcoded_curated=true \
   	-Ddefault_featured_apps=true
