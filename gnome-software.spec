@@ -117,12 +117,18 @@ find %{buildroot} -name "*.la" -delete
 # remove unneeded static library
 #rm %{buildroot}%{_libdir}/libgnomesoftware.a
 
+# make the software center load faster
+	
+desktop-file-edit %{buildroot}%{_datadir}/applications/org.gnome.Software.desktop \
+    --set-key=X-AppInstall-Package --set-value=%{name}
+
 desktop-file-validate %{buildroot}%{_datadir}/applications/*.desktop
 
 # set up for Mandriva
 cat >> %{buildroot}%{_datadir}/glib-2.0/schemas/org.gnome.software-openmandriva.gschema.override << FOE
 [org.gnome.software]
-official-repos = [ 'cooker-*', 'main-*', 'unsupported-*', 'restricted-*', 'non-free-*' ]
+official-repos = [ 'cooker-*', 'main-*', 'extra-*', 'restricted-*', 'non-free-*' ]
+packaging-format-preference = [ 'rpm' ]
 FOE
 
 %find_lang %name --with-gnome
