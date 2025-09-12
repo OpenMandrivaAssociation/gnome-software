@@ -162,6 +162,7 @@ FOE
 %{_libdir}/gnome-software/libgnomesoftware.so.%{plugin_major}
 %{_libdir}/%{name}/libgnomesoftware.so
 %{_libdir}/%{name}/plugins-%{plugin_major}/libgs_plugin_*.so
+%{_prefix}/lib/systemd/user/gnome-software.service
 
 %files devel
 %{_libdir}/pkgconfig/gnome-software.pc
