@@ -3,7 +3,7 @@
 # don't provide plugin .so
 %global __provides_exclude_from %{_libdir}/gs-plugins-3/.*\\.so
 
-%global plugin_major 22
+%global plugin_major 23
 
 #define _disable_ld_no_undefined 1
 #define _disable_lto 1
@@ -143,7 +143,7 @@ FOE
 %{_datadir}/metainfo/org.gnome.Software.Plugin.Fwupd.metainfo.xml
 %{_datadir}/metainfo/org.gnome.Software.Plugin.Epiphany.metainfo.xml
 %{_datadir}/metainfo/org.gnome.Software.metainfo.xml
-%{_sysconfdir}/xdg/autostart/org.gnome.Software.desktop
+#{_sysconfdir}/xdg/autostart/org.gnome.Software.desktop
 %{_datadir}/dbus-1/services/org.gnome.Software.service
 %{_datadir}/dbus-1/services/org.freedesktop.PackageKit.service
 %{_datadir}/glib-2.0/schemas/org.gnome.software.gschema.xml
