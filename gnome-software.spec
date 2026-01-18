@@ -11,7 +11,7 @@
 Summary:	A software center for GNOME
 Name:		gnome-software
 Version:	49.3
-Release:	1
+Release:	2
 License:	GPLv2+
 Group:		Graphical desktop/GNOME
 URL:		https://wiki.gnome.org/Apps/Software
@@ -102,6 +102,7 @@ export CXX=g++
 	-Dpackagekit_autoremove=true \
 	-Drpm_ostree=false \
 	-Dflatpak=true \
+	-Dsnap=true \
 	-Dgudev=true \
 	-Dfwupd=true \
  	-Dhardcoded_curated=true \
