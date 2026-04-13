@@ -73,13 +73,13 @@ Requires:	flatpak
 Requires:	fwupd
 
 %if %{with dnf5}            
-Requires: dnf5daemon-server%{?_isa}
-Requires: dnf5daemon-server-polkit
-Requires: libdnf5-plugin-appstream%{?_isa}            
-Requires: rpm-plugin-dbus-announce%{?_isa}            
+Requires: dnf5daemon-server
+# dnf5daemon-server-polkit is merged with dnf5daemon-server
+Requires: dnf-plugin-appstream          
+Requires: rpm-plugin-dbus-announce       
 %endif
 %if %{with packagekit}            
-Recommends: PackageKit%{?_isa} >= %{packagekit_version}            
+Recommends: packagekit        
 %endif
 
 Provides:	packagekit-gui
@@ -118,16 +118,16 @@ export CXX=g++
 	-Dmalcontent=false \
 	-Dpolkit=true \
  	-Ddkms=true \
-%if %{with packagekit}	
+%if %{with packagekit}
 	-Dpackagekit=true \
 	-Dpackagekit_autoremove=true \
 %else
-    -Dpackagekit=false \            
+    -Dpackagekit=false \
 %endif
-%if %{with dnf5}            
-    -Ddnf5=true \            
+%if %{with dnf5}
+    -Ddnf5=true \
 %else
-    -Ddnf5=false \            
+    -Ddnf5=false \
 %endif
 	-Drpm_ostree=false \
 	-Dflatpak=true \
