@@ -193,10 +193,6 @@ FOE
 %{_libdir}/%{name}/libgnomesoftware.so
 %{_libdir}/%{name}/plugins-%{plugin_major}/libgs_plugin_*.so
 
-%if %{with dnf5}            
-%{_libdir}/gnome-software/plugins-%{gs_plugin_version}/libgs_plugin_dnf5.so            
-%endif
-
 %files devel
 %{_libdir}/pkgconfig/gnome-software.pc
 %dir %{_includedir}/gnome-software
