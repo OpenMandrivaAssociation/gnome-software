@@ -153,7 +153,7 @@ FOE
 %{_datadir}/swcatalog/xml/org.gnome.Software.Curated.xml
 %{_datadir}/swcatalog/xml/org.gnome.Software.Featured.xml
 %{_libexecdir}/gnome-software-cmd
-%{_libexecdir}/gnome-software-restarter
+#{_libexecdir}/gnome-software-restarter
 %{_libexecdir}/gnome-software-dkms-helper
 %{_datadir}/metainfo/org.gnome.Software.Plugin.Flatpak.metainfo.xml
 %{_datadir}/swcatalog/xml/gnome-pwa-list-foss.xml
