@@ -5,6 +5,9 @@
 
 %global plugin_major 23
 
+%bcond packagekit 0            
+%bcond dnf5 1
+
 #define _disable_ld_no_undefined 1
 #define _disable_lto 1
 
@@ -16,6 +19,11 @@ License:	GPLv2+
 Group:		Graphical desktop/GNOME
 URL:		https://wiki.gnome.org/Apps/Software
 Source0:	https://download.gnome.org/sources/%{name}/%{url_ver}/%{name}-%{version}.tar.xz
+
+%if %{with dnf5}
+# imported from Fedora
+Patch:     0001-dnf5-plugin.patch
+%endif
 
 
 BuildRequires:	appstream >= 1.0.3
@@ -36,7 +44,9 @@ BuildRequires:	pkgconfig(sqlite3)
 BuildRequires:	pkgconfig(libdnf)
 BuildRequires:	pkgconfig(libadwaita-1)
 BuildRequires:	pkgconfig(libnotify)
+%if %{with packagekit}
 BuildRequires:	pkgconfig(packagekit-glib2) >= 1.0.0
+%endif
 BuildRequires:	pkgconfig(libsoup-3.0)
 BuildRequires:	pkgconfig(gsettings-desktop-schemas) >= 3.11.4
 BuildRequires:	pkgconfig(gnome-desktop-3.0)
@@ -61,6 +71,16 @@ Requires:	adwaita-icon-theme
 #Requires:	gnome-packagekit
 Requires:	flatpak
 Requires:	fwupd
+
+%if %{with dnf5}            
+Requires: dnf5daemon-server%{?_isa}
+Requires: dnf5daemon-server-polkit
+Requires: libdnf5-plugin-appstream%{?_isa}            
+Requires: rpm-plugin-dbus-announce%{?_isa}            
+%endif
+%if %{with packagekit}            
+Recommends: PackageKit%{?_isa} >= %{packagekit_version}            
+%endif
 
 Provides:	packagekit-gui
 
@@ -98,8 +118,17 @@ export CXX=g++
 	-Dmalcontent=false \
 	-Dpolkit=true \
  	-Ddkms=true \
+%if %{with packagekit}	
 	-Dpackagekit=true \
 	-Dpackagekit_autoremove=true \
+%else
+    -Dpackagekit=false \            
+%endif
+%if %{with dnf5}            
+    -Ddnf5=true \            
+%else
+    -Ddnf5=false \            
+%endif
 	-Drpm_ostree=false \
 	-Dflatpak=true \
 	-Dgudev=true \
@@ -159,10 +188,14 @@ FOE
 %{_datadir}/swcatalog/xml/gnome-pwa-list-foss.xml
 %{_datadir}/swcatalog/xml/gnome-pwa-list-proprietary.xml
 %{_datadir}/bash-completion/completions/gnome-software
+%{_prefix}/lib/systemd/user/gnome-software.service
 %{_libdir}/gnome-software/libgnomesoftware.so.%{plugin_major}
 %{_libdir}/%{name}/libgnomesoftware.so
 %{_libdir}/%{name}/plugins-%{plugin_major}/libgs_plugin_*.so
-%{_prefix}/lib/systemd/user/gnome-software.service
+
+%if %{with dnf5}            
+%{_libdir}/gnome-software/plugins-%{gs_plugin_version}/libgs_plugin_dnf5.so            
+%endif
 
 %files devel
 %{_libdir}/pkgconfig/gnome-software.pc
