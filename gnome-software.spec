@@ -27,6 +27,7 @@ Patch:     0001-dnf5-plugin.patch
 
 
 BuildRequires:	appstream >= 1.0.3
+BuildRequires:	atomic-devel
 BuildRequires:	cmake
 BuildRequires:	gettext
 BuildRequires:	gtk-doc
