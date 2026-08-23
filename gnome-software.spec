@@ -45,6 +45,7 @@ BuildRequires:	pkgconfig(sqlite3)
 BuildRequires:	pkgconfig(libdnf)
 BuildRequires:	pkgconfig(libadwaita-1)
 BuildRequires:	pkgconfig(libnotify)
+BuildRequires:	pkgconfig(libunwind)
 %if %{with packagekit}
 BuildRequires:	pkgconfig(packagekit-glib2) >= 1.0.0
 %endif
