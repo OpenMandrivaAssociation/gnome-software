@@ -1,5 +1,5 @@
-at commit d6779c6c6f7b9b7fc33c521d199b05f70b6fdb2e
-Date:   Mon Mar 16 17:00:48 2026 +0100
+at commit 8ad350809393538add93b84125de9157c4235374
+Date:   Wed May 13 13:53:43 2026 +0200
 
 diff --git a/lib/gs-fedora-third-party.c b/lib/gs-fedora-third-party.c
 index e79bba8cd..9905834a9 100644
@@ -623,10 +623,10 @@ index 000000000..5d522468c
 +G_END_DECLS
 diff --git a/plugins/dnf5/gs-plugin-dnf5.c b/plugins/dnf5/gs-plugin-dnf5.c
 new file mode 100644
-index 000000000..9edb8d741
+index 000000000..8972267a6
 --- /dev/null
 +++ b/plugins/dnf5/gs-plugin-dnf5.c
-@@ -0,0 +1,4885 @@
+@@ -0,0 +1,5028 @@
 +/* -*- Mode: C; tab-width: 8; indent-tabs-mode: t; c-basic-offset: 8 -*-
 + * vi:set noexpandtab tabstop=8 shiftwidth=8:
 + *
@@ -683,10 +683,21 @@ index 000000000..9edb8d741
 +		GMutex			 mutex;
 +		GCond			 cond;
 +		guint			 autoclose_timer;
-+		GsDnf5SessionManager	*proxy;
-+		gchar			*object_path;
 +		guint			 n_used;
 +		gint			 needs_reset;
++		GsDnf5SessionManager	*session_manager_proxy;
++		GsDnf5Advisory		*advisory_proxy;
++		GsDnf5Base		*base_proxy;
++		GsDnf5CompsGroup	*comps_group_proxy;
++		GsDnf5Goal		*goal_proxy;
++		GsDnf5History		*history_proxy;
++		GsDnf5Offline		*offline_proxy;
++		GsDnf5RpmRepo		*rpm_repo_proxy;
++		GsDnf5RpmRpm		*rpm_rpm_proxy;
++		gchar			*session_path;
++
++		/* guarded by session mutex, even for temporary sessions */
++		GHashTable		*active_calls; /* g_thread_self() ~> ActiveCallData * */
 +	} session_data;
 +
 +	struct _DependencySizesData {
@@ -750,6 +761,413 @@ index 000000000..9edb8d741
 +		gs_plugin_event_add_flag (event, GS_PLUGIN_EVENT_FLAG_INTERACTIVE);
 +	gs_plugin_event_add_flag (event, GS_PLUGIN_EVENT_FLAG_WARNING);
 +	event_callback (GS_PLUGIN (self), event, event_user_data);
++}
++
++typedef enum {
++	GS_DNF5_PROXY_ADVISORY,
++	GS_DNF5_PROXY_BASE,
++	GS_DNF5_PROXY_COMPS_GROUP,
++	GS_DNF5_PROXY_GOAL,
++	GS_DNF5_PROXY_HISTORY,
++	GS_DNF5_PROXY_OFFLINE,
++	GS_DNF5_PROXY_RPM_REPO,
++	GS_DNF5_PROXY_RPM_RPM
++} GsDnf5Proxy;
++
++static gpointer
++gs_dnf5_ref_dbus_proxy_sync (GsPluginDnf5 *self,
++			     const gchar *session_path,
++			     GsDnf5Proxy name,
++			     GCancellable *cancellable,
++			     GError **error)
++{
++	/* need to do this, thus any signals are delivered on the main context,
++	   not in the thread context, which can be blocked by a synchronous call */
++	g_autoptr(GMainContext) main_context = g_main_context_ref_thread_default ();
++	gboolean replace_main_context = main_context != NULL && g_main_context_default () != main_context;
++	gpointer proxy = NULL;
++
++	if (replace_main_context)
++		g_main_context_pop_thread_default (main_context);
++
++	#define proxy_new_sync(_mmbr, _fnc, _nm) G_STMT_START { \
++		gboolean is_default_session = g_strcmp0 (session_path, self->session_data.session_path) == 0; \
++		if (self->session_data._mmbr != NULL && is_default_session) { \
++			proxy = g_object_ref (self->session_data._mmbr); \
++		} else if (session_path == NULL) { \
++			g_set_error (error, G_IO_ERROR, G_IO_ERROR_NOT_CONNECTED, "Failed to create %s proxy: Session not connected", _nm); \
++		} else { \
++			proxy = _fnc (self->connection, G_DBUS_PROXY_FLAGS_DO_NOT_AUTO_START, GS_DNF5_INTERFACE_RPM_DNF, \
++				      session_path, cancellable, error); \
++			if (proxy != NULL) { \
++				if (is_default_session) \
++					self->session_data._mmbr = g_object_ref (proxy); \
++			} else { \
++				gs_dnf5_convert_error (error); \
++				g_prefix_error (error, "Failed to create %s proxy: ", _nm); \
++			} \
++		} } G_STMT_END
++
++	switch (name) {
++	case GS_DNF5_PROXY_ADVISORY:
++		proxy_new_sync (advisory_proxy, gs_dnf5_advisory_proxy_new_sync, "Advisory");
++		break;
++	case GS_DNF5_PROXY_BASE:
++		proxy_new_sync (base_proxy, gs_dnf5_base_proxy_new_sync, "Base");
++		break;
++	case GS_DNF5_PROXY_COMPS_GROUP:
++		proxy_new_sync (comps_group_proxy, gs_dnf5_comps_group_proxy_new_sync, "comps.Group");
++		break;
++	case GS_DNF5_PROXY_GOAL:
++		proxy_new_sync (goal_proxy, gs_dnf5_goal_proxy_new_sync, "Goal");
++		break;
++	case GS_DNF5_PROXY_HISTORY:
++		proxy_new_sync (history_proxy, gs_dnf5_history_proxy_new_sync, "History");
++		break;
++	case GS_DNF5_PROXY_OFFLINE:
++		proxy_new_sync (offline_proxy, gs_dnf5_offline_proxy_new_sync, "Offline");
++		break;
++	case GS_DNF5_PROXY_RPM_REPO:
++		proxy_new_sync (rpm_repo_proxy, gs_dnf5_rpm_repo_proxy_new_sync, "rpm.Repo");
++		break;
++	case GS_DNF5_PROXY_RPM_RPM:
++		proxy_new_sync (rpm_rpm_proxy, gs_dnf5_rpm_rpm_proxy_new_sync, "rpm.Rpm");
++		break;
++	default:
++		g_warn_if_reached ();
++		break;
++	}
++
++	#undef proxy_new_sync
++
++	if (replace_main_context)
++		g_main_context_push_thread_default (main_context);
++
++	return proxy;
++}
++
++typedef struct _ActiveCallData {
++	gboolean interactive;
++	GsDnf5Base *base_proxy; /* (owned) */
++	GsDnf5RpmRepo *rpm_repo_proxy; /* (owned) */
++	GCancellable *cancellable; /* (owned) */
++	gulong handler_id;
++} ActiveCallData;
++
++static ActiveCallData *
++active_call_data_new (gboolean interactive,
++		      GsDnf5Base *base_proxy, /* (transfer full) */
++		      GsDnf5RpmRepo *rpm_repo_proxy, /* (transfer full) */
++		      GCancellable *cancellable, /* (transfer none) */
++		      gulong handler_id)
++{
++	ActiveCallData *data;
++
++	data = g_new0 (ActiveCallData, 1);
++	data->interactive = interactive;
++	data->base_proxy = base_proxy;
++	data->rpm_repo_proxy = rpm_repo_proxy;
++	g_set_object (&data->cancellable, cancellable);
++	data->handler_id = handler_id;
++
++	return data;
++}
++
++static void
++active_call_data_free (gpointer ptr)
++{
++	ActiveCallData *data = ptr;
++
++	if (data) {
++		if (data->base_proxy != NULL && data->handler_id != 0)
++			g_signal_handler_disconnect (data->base_proxy, data->handler_id);
++
++		g_clear_object (&data->base_proxy);
++		g_clear_object (&data->rpm_repo_proxy);
++		g_free (data);
++	}
++}
++
++typedef struct _KeyImportRequestData {
++	gconstpointer request_id; /* a key into GsPluginDnf5::session_data.active_calls */
++	GsPluginDnf5 *self; /* (owned) */
++	gchar *session_path; /* (owned) */
++	GsDnf5RpmRepo *rpm_repo_proxy; /* (owned) */
++} KeyImportRequestData;
++
++static KeyImportRequestData *
++key_import_request_data_new (gconstpointer request_id,
++			     GsPluginDnf5 *self, /* (transfer none) */
++			     const gchar *session_path,
++			     GsDnf5RpmRepo *rpm_repo_proxy) /* (transfer none) */
++{
++	KeyImportRequestData *data;
++
++	data = g_new0 (KeyImportRequestData, 1);
++	data->request_id = request_id;
++	data->self = g_object_ref (self);
++	data->session_path = g_strdup (session_path);
++	data->rpm_repo_proxy = g_object_ref (rpm_repo_proxy);
++
++	return data;
++}
++
++static void
++key_import_request_data_free (gpointer ptr,
++			      GClosure *closure)
++{
++	KeyImportRequestData *data = ptr;
++
++	if (data) {
++		g_clear_object (&data->self);
++		g_clear_pointer (&data->session_path, g_free);
++		g_clear_object (&data->rpm_repo_proxy);
++		g_free (data);
++	}
++}
++
++static void
++gs_dnf5_confirm_key_response_cb (GObject *source_object,
++				 GAsyncResult *result,
++				 gpointer user_data)
++{
++	g_autoptr(GError) local_error = NULL;
++
++	if (!gs_dnf5_rpm_repo_call_confirm_key_with_options_finish (GS_DNF5_RPM_REPO (source_object), result, &local_error))
++		g_debug ("Failed to confirm key: %s", local_error->message);
++}
++
++typedef struct {
++	gchar *title;
++	gchar *msg;
++	gchar *details;
++	gchar *accept_label;
++	gchar *key_id;
++	gchar *key_filename;
++	gchar *session_path;
++	GsPluginDnf5 *self; /* (owned) */
++	GWeakRef repo_proxy_weakref; /* GsDnf5RpmRepo */
++	GCancellable *cancellable; /* (owned) */
++	gboolean interactive;
++	gboolean confirmed_by_repo;
++} QuestionData;
++
++static void
++question_data_free (QuestionData *data)
++{
++	if (data != NULL) {
++		g_free (data->title);
++		g_free (data->msg);
++		g_free (data->details);
++		g_free (data->accept_label);
++		g_free (data->key_id);
++		g_free (data->key_filename);
++		g_free (data->session_path);
++		g_clear_object (&data->self);
++		g_clear_object (&data->cancellable);
++		g_weak_ref_clear (&data->repo_proxy_weakref);
++		g_free (data);
++	}
++}
++
++static gboolean
++gs_dnf5_ask_question_idle_cb (gpointer user_data)
++{
++	QuestionData *data = user_data;
++	g_autoptr(GsDnf5RpmRepo) repo_proxy = NULL;
++
++	repo_proxy = g_weak_ref_get (&data->repo_proxy_weakref);
++	if (repo_proxy != NULL) {
++		g_autoptr(GVariantBuilder) options_builder = NULL;
++		gboolean confirmed;
++
++		/* auto-accept new keys, just as PacakgeKit plugin used to do */
++		confirmed = data->confirmed_by_repo;
++		if (!confirmed && data->interactive)
++			confirmed = gs_plugin_ask_untrusted (GS_PLUGIN (data->self), data->title, data->msg, data->details, data->accept_label);
++
++		options_builder = g_variant_builder_new (G_VARIANT_TYPE ("a{sv}"));
++		g_variant_builder_add (options_builder, "{sv}", "interactive",
++				       g_variant_new_boolean (data->interactive));
++
++		gs_dnf5_rpm_repo_call_confirm_key_with_options (repo_proxy,
++								data->key_id,
++								confirmed,
++								g_variant_builder_end (options_builder),
++								NULL,
++								gs_dnf5_confirm_key_response_cb,
++								NULL);
++	}
++
++	return G_SOURCE_REMOVE;
++}
++
++static gboolean
++gs_dnf5_read_package_repo_ids_cb (GsPluginDnf5 *self,
++				  GVariant *package_array,
++				  gpointer user_data,
++				  GCancellable *cancellable,
++				  GError **error)
++{
++	GPtrArray **out_repo_ids = user_data;
++	g_autoptr(GVariantDict) dict = NULL;
++	g_autoptr(GVariant) from_repo_id_value = NULL;
++	g_autoptr(GVariant) repo_id_value = NULL;
++
++	dict = g_variant_dict_new (package_array);
++
++	from_repo_id_value = g_variant_dict_lookup_value (dict, "from_repo_id", G_VARIANT_TYPE_STRING);
++	repo_id_value = g_variant_dict_lookup_value (dict, "repo_id", G_VARIANT_TYPE_STRING);
++	if (from_repo_id_value != NULL && repo_id_value != NULL) {
++		const gchar *from_repo_id_const = g_variant_get_string (from_repo_id_value, NULL);
++		const gchar *repo_id_const = g_variant_get_string (repo_id_value, NULL);
++		if (from_repo_id_const != NULL && *from_repo_id_const != '\0' &&
++		    g_strcmp0 (from_repo_id_const, "@commandline") != 0) {
++			if (*out_repo_ids == NULL)
++				*out_repo_ids = g_ptr_array_new_with_free_func (g_free);
++			/* keys installed during new installation can reference keys from now unknown ("anaconda") repo,
++			   which is shown as "@System" */
++			g_ptr_array_add (*out_repo_ids, g_strdup (g_strcmp0 (repo_id_const, "@System") == 0 ? repo_id_const : from_repo_id_const));
++		}
++	}
++
++	return TRUE;
++}
++
++static gboolean
++gs_dnf5_read_repo_gpg_info_cb (GsPluginDnf5 *self,
++			       GVariant *package_array,
++			       gpointer user_data,
++			       GCancellable *cancellable,
++			       GError **error)
++{
++	guint *out_n_good = user_data;
++	g_autoptr(GVariantDict) dict = NULL;
++	g_autoptr(GVariant) id_value = NULL;
++	g_autoptr(GVariant) gpgcheck_value = NULL;
++
++	dict = g_variant_dict_new (package_array);
++
++	id_value = g_variant_dict_lookup_value (dict, "id", G_VARIANT_TYPE_STRING);
++	gpgcheck_value = g_variant_dict_lookup_value (dict, "gpgcheck", G_VARIANT_TYPE_BOOLEAN);
++
++	if (id_value != NULL && gpgcheck_value != NULL) {
++		gboolean gpgcheck = g_variant_get_boolean (gpgcheck_value);
++
++		if (gpgcheck)
++			*out_n_good = (*out_n_good) + 1;
++	}
++
++	return TRUE;
++}
++
++static gpointer gs_dnf5_check_key_source_thread (gpointer user_data);
++
++static void
++gs_dnf5_repo_key_import_request_cb (GsDnf5Base *object,
++				    const gchar *arg_session_object_path,
++				    const gchar *arg_key_id,
++				    const gchar *const *arg_user_ids,
++				    const gchar *arg_key_fingerprint,
++				    const gchar *arg_key_url,
++				    gint64 arg_timestamp,
++				    KeyImportRequestData *request_data)
++{
++	ActiveCallData *call_data;
++	QuestionData *data;
++	g_autoptr(GString) user_ids = NULL;
++	g_autofree gchar *key_filename = NULL;
++	g_autoptr(GString) str_fingerprint = NULL;
++	GString *details = NULL;
++	const gchar *fingerprint;
++	const gchar *from;
++
++	if (g_strcmp0 (request_data->session_path, arg_session_object_path) != 0)
++		return;
++
++	call_data = g_hash_table_lookup (request_data->self->session_data.active_calls, request_data->request_id);
++
++	if (call_data == NULL) {
++		g_autoptr(GVariantBuilder) options_builder = NULL;
++
++		g_debug ("%s: rejecting non-existent repository key import request for key '%s'", G_STRFUNC, arg_key_id);
++
++		options_builder = g_variant_builder_new (G_VARIANT_TYPE ("a{sv}"));
++		g_variant_builder_add (options_builder, "{sv}", "interactive",
++				       g_variant_new_boolean (FALSE));
++
++		gs_dnf5_rpm_repo_call_confirm_key_with_options (request_data->rpm_repo_proxy,
++								arg_key_id,
++								FALSE,
++								g_variant_builder_end (options_builder),
++								NULL,
++								gs_dnf5_confirm_key_response_cb,
++								NULL);
++		return;
++	}
++
++	user_ids = g_string_new (NULL);
++	for (guint i = 0; arg_user_ids != NULL && arg_user_ids[i] != NULL; i++) {
++		if (i > 0)
++			g_string_append (user_ids, ", ");
++		g_string_append_c (user_ids, '"');
++		g_string_append (user_ids, arg_user_ids[i]);
++		g_string_append_c (user_ids, '"');
++	}
++
++	g_debug ("%s: key_id:'%s' user_ids:[%s] key_fingerprint:'%s' key_url:'%s' timestamp:%" G_GINT64_FORMAT,
++		 G_STRFUNC, arg_key_id, user_ids->str, arg_key_fingerprint, arg_key_url, arg_timestamp);
++
++	if (g_ascii_strncasecmp (arg_key_url, "file:", 5) == 0)
++		key_filename = g_filename_from_uri (arg_key_url, NULL, NULL);
++
++	if ((strlen (arg_key_fingerprint) % 4) == 0) {
++		str_fingerprint = g_string_new (arg_key_fingerprint);
++		for (gint i = str_fingerprint->len - 4; i > 0; i -= 4) {
++			g_string_insert_c (str_fingerprint, i, ' ');
++		}
++	}
++
++	details = g_string_new ("");
++
++	from = key_filename != NULL ? key_filename : arg_key_url;
++	fingerprint = str_fingerprint != NULL ? str_fingerprint->str : arg_key_fingerprint;
++
++	#define add_nonempty_line(_format, _value) G_STMT_START { \
++		if ((_value) != NULL && *(_value) != '\0') { \
++			g_string_append_printf (details, _format, _value); \
++			g_string_append_c (details, '\n'); \
++		} \
++	} G_STMT_END
++
++	/* Translators: the '%s' is replaced with the key user name */
++	add_nonempty_line (_("Key user: %s"), user_ids->str);
++	/* Translators: the '%s' is replaced with the key fingerprint, a few hex digits */
++	add_nonempty_line (_("Fingerprint: %s"), fingerprint);
++	/* Translators: the '%s' is replaced with the local path or a URI to the key */
++	add_nonempty_line (_("From: %s"), from);
++
++	#undef add_nonempty_line
++
++	data = g_new0 (QuestionData, 1);
++	data->title = g_strdup (_("Import Key"));
++	/* Translators: the '%s' is replaced with the key ID, usually a few hex digits */
++	data->msg = g_strdup_printf (_("Do you want to import key %s?"), arg_key_id);
++	data->details = g_string_free (details, FALSE);
++	data->accept_label = g_strdup (_("_Import Key"));
++	data->key_id = g_strdup (arg_key_id);
++	data->key_filename = g_steal_pointer (&key_filename);
++	data->session_path = g_strdup (request_data->session_path);
++	data->self = g_object_ref (request_data->self);
++	g_set_object (&data->cancellable, call_data->cancellable);
++	data->interactive = call_data->interactive;
++	data->confirmed_by_repo = FALSE;
++	g_weak_ref_init (&data->repo_proxy_weakref, request_data->rpm_repo_proxy);
++
++	if (data->key_filename != NULL)
++		g_thread_unref (g_thread_new ("gs-dnf5-check-key-source_thread", gs_dnf5_check_key_source_thread, data));
++	else
++		g_idle_add_full (G_PRIORITY_HIGH_IDLE, gs_dnf5_ask_question_idle_cb, data, (GDestroyNotify) question_data_free);
 +}
 +
 +/* The session reset is used to refresh information about the packages,
@@ -1006,11 +1424,19 @@ index 000000000..9edb8d741
 +	g_autoptr(GMutexLocker) locker = g_mutex_locker_new (&self->session_data.mutex);
 +
 +	self->session_data.autoclose_timer = 0;
-+	if (self->session_data.n_used == 0 && self->session_data.proxy != NULL) {
-+		gs_dnf5_close_session_real (self->session_data.proxy, self->session_data.object_path);
++	if (self->session_data.n_used == 0 && self->session_data.session_manager_proxy != NULL) {
++		gs_dnf5_close_session_real (self->session_data.session_manager_proxy, self->session_data.session_path);
 +
-+		g_clear_object (&self->session_data.proxy);
-+		g_clear_pointer (&self->session_data.object_path, g_free);
++		g_clear_object (&self->session_data.session_manager_proxy);
++		g_clear_object (&self->session_data.advisory_proxy);
++		g_clear_object (&self->session_data.base_proxy);
++		g_clear_object (&self->session_data.comps_group_proxy);
++		g_clear_object (&self->session_data.goal_proxy);
++		g_clear_object (&self->session_data.history_proxy);
++		g_clear_object (&self->session_data.offline_proxy);
++		g_clear_object (&self->session_data.rpm_repo_proxy);
++		g_clear_object (&self->session_data.rpm_rpm_proxy);
++		g_clear_pointer (&self->session_data.session_path, g_free);
 +	}
 +
 +	return G_SOURCE_REMOVE;
@@ -1026,17 +1452,9 @@ index 000000000..9edb8d741
 +	g_autofree gchar *error_msg = NULL;
 +	gboolean success = FALSE;
 +
-+	base_proxy = gs_dnf5_base_proxy_new_sync (self->connection,
-+						  G_DBUS_PROXY_FLAGS_DO_NOT_AUTO_START,
-+						  GS_DNF5_INTERFACE_RPM_DNF,
-+						  session_path,
-+						  cancellable,
-+						  error);
-+	if (base_proxy == NULL) {
-+		gs_dnf5_convert_error (error);
-+		g_prefix_error_literal (error, "Failed to create Base proxy: ");
++	base_proxy = gs_dnf5_ref_dbus_proxy_sync (self, session_path, GS_DNF5_PROXY_BASE, cancellable, error);
++	if (base_proxy == NULL)
 +		return FALSE;
-+	}
 +
 +	if (!gs_dnf5_base_call_reset_sync (base_proxy, &success, &error_msg, cancellable, error)) {
 +		gs_dnf5_convert_error (error);
@@ -1052,9 +1470,42 @@ index 000000000..9edb8d741
 +	return TRUE;
 +}
 +
++static void
++gs_dnf5_prepare_action_call_sync (GsPluginDnf5 *self,
++				  gboolean interactive,
++				  const gchar *session_path,
++				  GCancellable *cancellable)
++{
++	gconstpointer request_id = g_thread_self ();
++	g_autoptr(GsDnf5Base) base_proxy = NULL;
++	g_autoptr(GsDnf5RpmRepo) rpm_repo_proxy = NULL;
++	g_autoptr(GError) local_error = NULL;
++
++	base_proxy = gs_dnf5_ref_dbus_proxy_sync (self, session_path, GS_DNF5_PROXY_BASE, cancellable, &local_error);
++	if (base_proxy != NULL)
++		rpm_repo_proxy = gs_dnf5_ref_dbus_proxy_sync (self, session_path, GS_DNF5_PROXY_RPM_REPO, cancellable, &local_error);
++
++	if (base_proxy != NULL && rpm_repo_proxy != NULL) {
++		ActiveCallData *call_data;
++		gulong handler_id = 0;
++
++		handler_id = g_signal_connect_data (base_proxy, "repo_key_import_request",
++						    G_CALLBACK (gs_dnf5_repo_key_import_request_cb),
++						    key_import_request_data_new (request_id, self, session_path, rpm_repo_proxy),
++						    key_import_request_data_free, G_CONNECT_DEFAULT);
++
++		g_assert (g_hash_table_lookup (self->session_data.active_calls, request_id) == NULL);
++		call_data = active_call_data_new (interactive, g_steal_pointer (&base_proxy), g_steal_pointer (&rpm_repo_proxy), cancellable, handler_id);
++		g_hash_table_insert (self->session_data.active_calls, (gpointer) request_id, call_data);
++	} else {
++		g_warning ("%s: %s", G_STRFUNC, local_error->message);
++	}
++}
++
 +static gchar * /* (transfer full) */
 +gs_dnf5_open_session (GsPluginDnf5 *self,
 +		      const gchar *releasever,
++		      gboolean interactive,
 +		      GsDnf5SessionManager **out_proxy, /* (transfer full) */
 +		      GCancellable *cancellable,
 +		      GError **error)
@@ -1069,8 +1520,8 @@ index 000000000..9edb8d741
 +			self->session_data.autoclose_timer = 0;
 +		}
 +
-+		if (self->session_data.proxy != NULL) {
-+			GsDnf5SessionManager *proxy = self->session_data.proxy;
++		if (self->session_data.session_manager_proxy != NULL) {
++			GsDnf5SessionManager *proxy = self->session_data.session_manager_proxy;
 +
 +			while (g_atomic_int_get (&self->session_data.needs_reset) &&
 +			       !g_cancellable_is_cancelled (cancellable)) {
@@ -1093,7 +1544,7 @@ index 000000000..9edb8d741
 +				if (g_atomic_int_get (&self->session_data.needs_reset)) {
 +					gboolean success;
 +
-+					success = gs_dnf5_reset_session_sync (self, self->session_data.object_path, cancellable, &local_error);
++					success = gs_dnf5_reset_session_sync (self, self->session_data.session_path, cancellable, &local_error);
 +					g_atomic_int_set (&self->session_data.needs_reset, 0);
 +
 +					/* let any waiter for session reset know the conditions changed */
@@ -1114,11 +1565,12 @@ index 000000000..9edb8d741
 +			if (g_cancellable_set_error_if_cancelled (cancellable, error))
 +				return NULL;
 +
-+			if (proxy == self->session_data.proxy) {
++			if (proxy == self->session_data.session_manager_proxy) {
 +				self->session_data.n_used++;
 +				g_debug ("Using existing session");
-+				*out_proxy = g_object_ref (self->session_data.proxy);
-+				return g_strdup (self->session_data.object_path);
++				*out_proxy = g_object_ref (self->session_data.session_manager_proxy);
++				gs_dnf5_prepare_action_call_sync (self, interactive, self->session_data.session_path, cancellable);
++				return g_strdup (self->session_data.session_path);
 +			}
 +		}
 +	}
@@ -1167,15 +1619,18 @@ index 000000000..9edb8d741
 +							     error)) {
 +		gs_dnf5_convert_error (error);
 +		g_prefix_error_literal (error, "Failed to open session: ");
++		g_clear_object (out_proxy);
 +		return NULL;
 +	}
 +
 +	if (releasever == GS_DNF5_RELEASEVER_DEFAULT) {
-+		g_assert (self->session_data.proxy == NULL);
-+		self->session_data.proxy = g_object_ref (*out_proxy);
-+		self->session_data.object_path = g_strdup (session_path);
++		g_assert (self->session_data.session_manager_proxy == NULL);
++		self->session_data.session_manager_proxy = g_object_ref (*out_proxy);
++		self->session_data.session_path = g_strdup (session_path);
 +		self->session_data.n_used = 1;
 +	}
++
++	gs_dnf5_prepare_action_call_sync (self, interactive, session_path, cancellable);
 +
 +	return g_steal_pointer (&session_path);
 +}
@@ -1187,7 +1642,16 @@ index 000000000..9edb8d741
 +{
 +	g_autoptr(GMutexLocker) locker = g_mutex_locker_new (&self->session_data.mutex);
 +
-+	if (self->session_data.proxy == proxy) {
++	if (proxy != NULL && session_path != NULL) {
++		/* this relies on the fact that each gs_dnf5_open_session() is followed by gs_dnf5_close_session()
++		   at the end of the same function, thus in the same thread, allowing the thread pointer to be used
++		   as the request ID */
++		gconstpointer request_id = g_thread_self ();
++
++		g_hash_table_remove (self->session_data.active_calls, request_id);
++	}
++
++	if (self->session_data.session_manager_proxy == proxy) {
 +		g_assert (self->session_data.n_used > 0);
 +		self->session_data.n_used--;
 +
@@ -1347,9 +1811,11 @@ index 000000000..9edb8d741
 +		else
 +			state = GS_APP_STATE_AVAILABLE;
 +	}
-+	/* The state can be only installed, available or updatable  */
++
++	/* The state can be only installed, available, updatable or file-to-app's available-local */
 +	if (gs_app_get_state (app) == state ||
-+	    gs_app_get_state (app) == GS_APP_STATE_UPDATABLE)
++	    gs_app_get_state (app) == GS_APP_STATE_UPDATABLE ||
++	    gs_app_get_state (app) == GS_APP_STATE_AVAILABLE_LOCAL)
 +		return;
 +	if (gs_app_get_state (app) == GS_APP_STATE_UNKNOWN)
 +		gs_app_set_state (app, state);
@@ -1508,6 +1974,7 @@ index 000000000..9edb8d741
 +			 GError **error)
 +{
 +	ReadPackageData *rpd = user_data;
++	GsDnf5ReadPackageFlags flags = rpd->set_state != GS_APP_STATE_AVAILABLE_LOCAL ? GS_DNF5_READ_PACKAGE_FLAG_CAN_CACHED : GS_DNF5_READ_PACKAGE_FLAG_NONE;
 +	GsAppList *list = rpd->list;
 +	GHashTable *nevra_to_app = rpd->nevra_to_app;
 +	g_autoptr(GsApp) app = NULL;
@@ -1515,7 +1982,7 @@ index 000000000..9edb8d741
 +
 +	dict = g_variant_dict_new (package_array);
 +
-+	app = gs_dnf5_read_package_from_dict (self, dict, GS_DNF5_READ_PACKAGE_FLAG_CAN_CACHED | GS_DNF5_READ_PACKAGE_FLAG_CHANGELOGS, rpd->set_state);
++	app = gs_dnf5_read_package_from_dict (self, dict, flags | GS_DNF5_READ_PACKAGE_FLAG_CHANGELOGS, rpd->set_state);
 +
 +	if (nevra_to_app != NULL) {
 +		g_autoptr(GVariant) value = NULL;
@@ -1592,6 +2059,13 @@ index 000000000..9edb8d741
 +	return TRUE;
 +}
 +
++typedef struct _RefineFromAdvisoryData {
++	GHashTable *nevra_to_app;
++	const gchar *description_markup;
++	const gchar *description_text;
++	gboolean is_critical;
++} RefineFromAdvisoryData;
++
 +static gboolean
 +gs_dnf5_refine_from_advisory_packages_cb (GsPluginDnf5 *self,
 +					  GVariant *array,
@@ -1599,7 +2073,7 @@ index 000000000..9edb8d741
 +					  GCancellable *cancellable,
 +					  GError **error)
 +{
-+	GHashTable *nevra_to_app = user_data;
++	RefineFromAdvisoryData *data = user_data;
 +	g_autoptr(GVariantDict) dict = NULL;
 +	g_autoptr(GVariant) var_nevra = NULL;
 +
@@ -1611,9 +2085,16 @@ index 000000000..9edb8d741
 +		if (nevra != NULL) {
 +			GsApp *app;
 +
-+			app = g_hash_table_lookup (nevra_to_app, nevra);
-+			if (app != NULL)
-+				gs_app_set_update_urgency (app, AS_URGENCY_KIND_CRITICAL);
++			app = g_hash_table_lookup (data->nevra_to_app, nevra);
++			if (app != NULL) {
++				if (data->is_critical)
++					gs_app_set_update_urgency (app, AS_URGENCY_KIND_CRITICAL);
++
++				if (data->description_markup != NULL && *data->description_markup != '\0')
++					gs_app_set_update_details_markup (app, data->description_markup);
++				else if (data->description_text != NULL && *data->description_text != '\0')
++					gs_app_set_update_details_text (app, data->description_text);
++			}
 +		}
 +	}
 +
@@ -1627,7 +2108,7 @@ index 000000000..9edb8d741
 +					     GCancellable *cancellable,
 +					     GError **error)
 +{
-+	GHashTable *nevra_to_app = user_data;
++	RefineFromAdvisoryData *data = user_data;
 +	g_autoptr(GVariantDict) dict = NULL;
 +	g_autoptr(GVariant) packages = NULL;
 +	gboolean res = TRUE;
@@ -1636,7 +2117,7 @@ index 000000000..9edb8d741
 +
 +	packages = g_variant_dict_lookup_value (dict, "packages", G_VARIANT_TYPE_ARRAY);
 +	if (packages != NULL)
-+		res = gs_dnf5_foreach_item (self, packages, gs_dnf5_refine_from_advisory_packages_cb, nevra_to_app, cancellable, error);
++		res = gs_dnf5_foreach_item (self, packages, gs_dnf5_refine_from_advisory_packages_cb, data, cancellable, error);
 +
 +	return res;
 +}
@@ -1648,23 +2129,42 @@ index 000000000..9edb8d741
 +				 GCancellable *cancellable,
 +				 GError **error)
 +{
++	RefineFromAdvisoryData data;
 +	GHashTable *nevra_to_app = user_data;
++	g_autofree gchar *markup = NULL;
 +	g_autoptr(GVariantDict) dict = NULL;
 +	g_autoptr(GVariant) collections = NULL;
 +	g_autoptr(GVariant) severity = NULL;
++	g_autoptr(GVariant) description = NULL;
 +	gboolean res = TRUE;
++
++	data.nevra_to_app = nevra_to_app;
++	data.description_markup = NULL;
++	data.description_text = NULL;
 +
 +	dict = g_variant_dict_new (array);
 +
-+	/* ensure only advisories with severity 'critical' are traversed */
 +	severity = g_variant_dict_lookup_value (dict, "severity", G_VARIANT_TYPE_STRING);
-+	if (severity == NULL || g_variant_get_string (severity, NULL) == NULL ||
-+	    g_ascii_strcasecmp (g_variant_get_string (severity, NULL), "critical") != 0)
-+		return TRUE;
++	data.is_critical = severity != NULL && g_variant_get_string (severity, NULL) != NULL &&
++			   g_ascii_strcasecmp (g_variant_get_string (severity, NULL), "critical") == 0;
++
++	description = g_variant_dict_lookup_value (dict, "description", G_VARIANT_TYPE_STRING);
++	if (description != NULL) {
++		const gchar *description_str = g_variant_get_string (description, NULL);
++
++		if (description_str != NULL && *description_str != '\0') {
++			g_autoptr(GsMarkdown) markdown = gs_markdown_new (GS_MARKDOWN_OUTPUT_PANGO);
++			markup = gs_markdown_parse (markdown, description_str);
++			if (markup != NULL && *markup != '\0')
++				data.description_markup = markup;
++			else
++				data.description_text = description_str;
++		}
++	}
 +
 +	collections = g_variant_dict_lookup_value (dict, "collections", G_VARIANT_TYPE_ARRAY);
 +	if (collections != NULL)
-+		res = gs_dnf5_foreach_item (self, collections, gs_dnf5_refine_from_advisory_collections_cb, nevra_to_app, cancellable, error);
++		res = gs_dnf5_foreach_item (self, collections, gs_dnf5_refine_from_advisory_collections_cb, &data, cancellable, error);
 +
 +	return res;
 +}
@@ -1695,150 +2195,6 @@ index 000000000..9edb8d741
 +	return g_variant_builder_end (attrs_builder);
 +}
 +
-+static void
-+gs_dnf5_gather_async_result_cb (GObject *source_object,
-+				GAsyncResult *result,
-+				gpointer user_data)
-+{
-+	GAsyncResult **out_result = user_data;
-+	*out_result = g_object_ref (result);
-+}
-+
-+static void
-+gs_dnf5_confirm_key_response_cb (GObject *source_object,
-+				 GAsyncResult *result,
-+				 gpointer user_data)
-+{
-+	g_autoptr(GError) local_error = NULL;
-+
-+	if (!gs_dnf5_rpm_repo_call_confirm_key_finish (GS_DNF5_RPM_REPO (source_object), result, &local_error))
-+		g_debug ("Failed to confirm key: %s", local_error->message);
-+}
-+
-+typedef struct {
-+	gchar *title;
-+	gchar *msg;
-+	gchar *details;
-+	gchar *accept_label;
-+	gchar *key_id;
-+	gchar *key_filename;
-+	gchar *session_path;
-+	GCancellable *cancellable; /* (owned) */
-+	GsPluginDnf5 *self; /* (owned) */
-+	GWeakRef repo_proxy_weakref; /* GsDnf5RpmRepo */
-+	gboolean interactive;
-+	gboolean confirmed_by_repo;
-+} QuestionData;
-+
-+static void
-+question_data_free (QuestionData *data)
-+{
-+	if (data != NULL) {
-+		g_free (data->title);
-+		g_free (data->msg);
-+		g_free (data->details);
-+		g_free (data->accept_label);
-+		g_free (data->key_id);
-+		g_free (data->key_filename);
-+		g_free (data->session_path);
-+		g_clear_object (&data->cancellable);
-+		g_clear_object (&data->self);
-+		g_weak_ref_clear (&data->repo_proxy_weakref);
-+		g_free (data);
-+	}
-+}
-+
-+static gboolean
-+gs_dnf5_ask_question_idle_cb (gpointer user_data)
-+{
-+	QuestionData *data = user_data;
-+	g_autoptr(GsDnf5RpmRepo) repo_proxy = NULL;
-+
-+	repo_proxy = g_weak_ref_get (&data->repo_proxy_weakref);
-+	if (repo_proxy != NULL) {
-+		g_autoptr(GVariantBuilder) options_builder = NULL;
-+		gboolean confirmed;
-+
-+		/* auto-accept new keys, just as PacakgeKit plugin used to do */
-+		confirmed = data->confirmed_by_repo;
-+		if (!confirmed)
-+			confirmed = gs_plugin_ask_untrusted (GS_PLUGIN (data->self), data->title, data->msg, data->details, data->accept_label);
-+
-+		options_builder = g_variant_builder_new (G_VARIANT_TYPE ("a{sv}"));
-+		g_variant_builder_add (options_builder, "{sv}", "interactive",
-+				       g_variant_new_boolean (data->interactive));
-+
-+		gs_dnf5_rpm_repo_call_confirm_key_with_options (repo_proxy,
-+								data->key_id,
-+								confirmed,
-+								g_variant_builder_end (options_builder),
-+								data->cancellable,
-+								gs_dnf5_confirm_key_response_cb,
-+								NULL);
-+	}
-+
-+	return G_SOURCE_REMOVE;
-+}
-+
-+static gboolean
-+gs_dnf5_read_package_repo_ids_cb (GsPluginDnf5 *self,
-+				  GVariant *package_array,
-+				  gpointer user_data,
-+				  GCancellable *cancellable,
-+				  GError **error)
-+{
-+	GPtrArray **out_repo_ids = user_data;
-+	g_autoptr(GVariantDict) dict = NULL;
-+	g_autoptr(GVariant) from_repo_id_value = NULL;
-+	g_autoptr(GVariant) repo_id_value = NULL;
-+
-+	dict = g_variant_dict_new (package_array);
-+
-+	from_repo_id_value = g_variant_dict_lookup_value (dict, "from_repo_id", G_VARIANT_TYPE_STRING);
-+	repo_id_value = g_variant_dict_lookup_value (dict, "repo_id", G_VARIANT_TYPE_STRING);
-+	if (from_repo_id_value != NULL && repo_id_value != NULL) {
-+		const gchar *from_repo_id_const = g_variant_get_string (from_repo_id_value, NULL);
-+		const gchar *repo_id_const = g_variant_get_string (repo_id_value, NULL);
-+		if (from_repo_id_const != NULL && *from_repo_id_const != '\0' &&
-+		    g_strcmp0 (from_repo_id_const, "@commandline") != 0) {
-+			if (*out_repo_ids == NULL)
-+				*out_repo_ids = g_ptr_array_new_with_free_func (g_free);
-+			/* keys installed during new installation can reference keys from now unknown ("anaconda") repo,
-+			   which is shown as "@System" */
-+			g_ptr_array_add (*out_repo_ids, g_strdup (g_strcmp0 (repo_id_const, "@System") == 0 ? repo_id_const : from_repo_id_const));
-+		}
-+	}
-+
-+	return TRUE;
-+}
-+
-+static gboolean
-+gs_dnf5_read_repo_gpg_info_cb (GsPluginDnf5 *self,
-+			       GVariant *package_array,
-+			       gpointer user_data,
-+			       GCancellable *cancellable,
-+			       GError **error)
-+{
-+	guint *out_n_good = user_data;
-+	g_autoptr(GVariantDict) dict = NULL;
-+	g_autoptr(GVariant) id_value = NULL;
-+	g_autoptr(GVariant) gpgcheck_value = NULL;
-+
-+	dict = g_variant_dict_new (package_array);
-+
-+	id_value = g_variant_dict_lookup_value (dict, "id", G_VARIANT_TYPE_STRING);
-+	gpgcheck_value = g_variant_dict_lookup_value (dict, "gpgcheck", G_VARIANT_TYPE_BOOLEAN);
-+
-+	if (id_value != NULL && gpgcheck_value != NULL) {
-+		gboolean gpgcheck = g_variant_get_boolean (gpgcheck_value);
-+
-+		if (gpgcheck)
-+			*out_n_good = (*out_n_good) + 1;
-+	}
-+
-+	return TRUE;
-+}
-+
 +static gpointer
 +gs_dnf5_check_key_source_thread (gpointer user_data)
 +{
@@ -1850,21 +2206,13 @@ index 000000000..9edb8d741
 +	g_autoptr(GError) local_error = NULL;
 +	gboolean success;
 +
-+	session_path = gs_dnf5_open_session (data->self, GS_DNF5_RELEASEVER_TEMPORARY, &session_manager, data->cancellable, &local_error);
++	/* always open this session as non-interactive, to avoid key import prompts in the GUI */
++	session_path = gs_dnf5_open_session (data->self, GS_DNF5_RELEASEVER_TEMPORARY, FALSE, &session_manager, data->cancellable, &local_error);
 +	success = session_path != NULL;
 +
 +	if (success) {
-+		rpm_proxy = gs_dnf5_rpm_rpm_proxy_new_sync (data->self->connection,
-+							    G_DBUS_PROXY_FLAGS_DO_NOT_AUTO_START,
-+							    GS_DNF5_INTERFACE_RPM_DNF,
-+							    session_path,
-+							    data->cancellable,
-+							    &local_error);
++		rpm_proxy = gs_dnf5_ref_dbus_proxy_sync (data->self, session_path, GS_DNF5_PROXY_RPM_RPM, data->cancellable, &local_error);
 +		success = rpm_proxy != NULL;
-+		if (!success) {
-+			gs_dnf5_convert_error (&local_error);
-+			g_prefix_error_literal (&local_error, "Failed to create Rpm proxy: ");
-+		}
 +	} else {
 +		gs_dnf5_convert_error (&local_error);
 +		g_prefix_error_literal (&local_error, "Failed to open new session: ");
@@ -1931,12 +2279,7 @@ index 000000000..9edb8d741
 +		if (patterns_builder != NULL) {
 +			g_autoptr(GsDnf5RpmRepo) repo_proxy = NULL;
 +
-+			repo_proxy = gs_dnf5_rpm_repo_proxy_new_sync (data->self->connection,
-+								      G_DBUS_PROXY_FLAGS_DO_NOT_AUTO_START,
-+								      GS_DNF5_INTERFACE_RPM_DNF,
-+								      session_path,
-+								      data->cancellable,
-+								      &local_error);
++			repo_proxy = gs_dnf5_ref_dbus_proxy_sync (data->self, session_path, GS_DNF5_PROXY_RPM_REPO, data->cancellable, &local_error);
 +			if (repo_proxy != NULL) {
 +				g_autoptr(GVariantBuilder) repo_attrs_builder = NULL;
 +				g_autoptr(GVariantBuilder) options_builder = NULL;
@@ -1967,8 +2310,6 @@ index 000000000..9edb8d741
 +				}
 +			} else {
 +				success = FALSE;
-+				gs_dnf5_convert_error (&local_error);
-+				g_prefix_error_literal (&local_error, "Failed to create Repo proxy: ");
 +			}
 +		}
 +
@@ -1984,99 +2325,6 @@ index 000000000..9edb8d741
 +	g_idle_add_full (G_PRIORITY_HIGH_IDLE, gs_dnf5_ask_question_idle_cb, data, (GDestroyNotify) question_data_free);
 +
 +	return NULL;
-+}
-+
-+typedef struct {
-+	GsPluginDnf5 *self; /* (not owned) */
-+	const gchar *session_path; /* (not owned) */
-+	GsDnf5RpmRepo *repo_proxy; /* (not owned) */
-+	GCancellable *cancellable; /* (not owned) */
-+	gboolean interactive;
-+} RepoKeyImportData;
-+
-+static void
-+gs_dnf5_repo_key_import_request_cb (GsDnf5Base *object,
-+				    const gchar *arg_session_object_path,
-+				    const gchar *arg_key_id,
-+				    const gchar *const *arg_user_ids,
-+				    const gchar *arg_key_fingerprint,
-+				    const gchar *arg_key_url,
-+				    gint64 arg_timestamp,
-+				    RepoKeyImportData *repo_key_import_data)
-+{
-+	QuestionData *data;
-+	g_autoptr(GString) user_ids = NULL;
-+	g_autofree gchar *key_filename = NULL;
-+	g_autoptr(GString) str_fingerprint = NULL;
-+	GString *details = NULL;
-+	const gchar *fingerprint;
-+	const gchar *from;
-+
-+	if (g_strcmp0 (repo_key_import_data->session_path, arg_session_object_path) != 0)
-+		return;
-+
-+	user_ids = g_string_new (NULL);
-+	for (guint i = 0; arg_user_ids != NULL && arg_user_ids[i] != NULL; i++) {
-+		if (i > 0)
-+			g_string_append (user_ids, ", ");
-+		g_string_append_c (user_ids, '"');
-+		g_string_append (user_ids, arg_user_ids[i]);
-+		g_string_append_c (user_ids, '"');
-+	}
-+
-+	g_debug ("%s: key_id:'%s' user_ids:[%s] key_fingerprint:'%s' key_url:'%s' timestamp:%" G_GINT64_FORMAT,
-+		 G_STRFUNC, arg_key_id, user_ids->str, arg_key_fingerprint, arg_key_url, arg_timestamp);
-+
-+	if (g_ascii_strncasecmp (arg_key_url, "file:", 5) == 0)
-+		key_filename = g_filename_from_uri (arg_key_url, NULL, NULL);
-+
-+	if ((strlen (arg_key_fingerprint) % 4) == 0) {
-+		str_fingerprint = g_string_new (arg_key_fingerprint);
-+		for (gint i = str_fingerprint->len - 4; i > 0; i -= 4) {
-+			g_string_insert_c (str_fingerprint, i, ' ');
-+		}
-+	}
-+
-+	details = g_string_new ("");
-+
-+	from = key_filename != NULL ? key_filename : arg_key_url;
-+	fingerprint = str_fingerprint != NULL ? str_fingerprint->str : arg_key_fingerprint;
-+
-+	#define add_nonempty_line(_format, _value) G_STMT_START { \
-+		if ((_value) != NULL && *(_value) != '\0') { \
-+			g_string_append_printf (details, _format, _value); \
-+			g_string_append_c (details, '\n'); \
-+		} \
-+	} G_STMT_END
-+
-+	/* Translators: the '%s' is replaced with the key user name */
-+	add_nonempty_line (_("Key user: %s"), user_ids->str);
-+	/* Translators: the '%s' is replaced with the key fingerprint, a few hex digits */
-+	add_nonempty_line (_("Fingerprint: %s"), fingerprint);
-+	/* Translators: the '%s' is replaced with the local path or a URI to the key */
-+	add_nonempty_line (_("From: %s"), from);
-+
-+	#undef add_nonempty_line
-+
-+	data = g_new0 (QuestionData, 1);
-+	data->title = g_strdup (_("Import Key"));
-+	/* Translators: the '%s' is replaced with the key ID, usually a few hex digits */
-+	data->msg = g_strdup_printf (_("Do you want to import key %s?"), arg_key_id);
-+	data->details = g_string_free (details, FALSE);
-+	data->accept_label = g_strdup (_("_Import Key"));
-+	data->key_id = g_strdup (arg_key_id);
-+	data->key_filename = g_steal_pointer (&key_filename);
-+	data->session_path = g_strdup (repo_key_import_data->session_path);
-+	data->self = g_object_ref (repo_key_import_data->self);
-+	data->interactive = repo_key_import_data->interactive;
-+	data->confirmed_by_repo = FALSE;
-+	g_set_object (&data->cancellable, repo_key_import_data->cancellable);
-+	g_weak_ref_init (&data->repo_proxy_weakref, repo_key_import_data->repo_proxy);
-+
-+	if (data->key_filename != NULL)
-+		g_thread_unref (g_thread_new ("gs-dnf5-check-key-source_thread", gs_dnf5_check_key_source_thread, data));
-+	else
-+		g_idle_add_full (G_PRIORITY_HIGH_IDLE, gs_dnf5_ask_question_idle_cb, data, (GDestroyNotify) question_data_free);
 +}
 +
 +static void
@@ -2110,34 +2358,11 @@ index 000000000..9edb8d741
 +{
 +	g_autoptr(GsDnf5Goal) goal_proxy = NULL;
 +
-+	goal_proxy = gs_dnf5_goal_proxy_new_sync (self->connection,
-+						  G_DBUS_PROXY_FLAGS_DO_NOT_AUTO_START,
-+						  GS_DNF5_INTERFACE_RPM_DNF,
-+						  session_path,
-+						  cancellable,
-+						  error);
-+	if (goal_proxy == NULL) {
-+		gs_dnf5_convert_error (error);
-+		g_prefix_error_literal (error, "Failed to create Goal proxy: ");
++	goal_proxy = gs_dnf5_ref_dbus_proxy_sync (self, session_path, GS_DNF5_PROXY_GOAL, cancellable, error);
++	if (goal_proxy == NULL)
 +		return FALSE;
-+	}
 +
 +	return gs_dnf5_goal_call_reset_sync (goal_proxy, cancellable, error);
-+}
-+
-+/* this is needed to receive D-Bus signals about progress in the worker thread */
-+static gboolean
-+gs_dnf5_goal_call_do_transaction_sync_wrapper (GsDnf5Goal *proxy,
-+					       GVariant *arg_options,
-+					       GCancellable *cancellable,
-+					       GError **error)
-+{
-+	g_autoptr(GMainContext) main_context = g_main_context_ref_thread_default ();
-+	g_autoptr(GAsyncResult) async_result = NULL;
-+	gs_dnf5_goal_call_do_transaction (proxy, arg_options, cancellable, gs_dnf5_gather_async_result_cb, &async_result);
-+	while (!async_result)
-+		g_main_context_iteration (main_context, TRUE);
-+	return gs_dnf5_goal_call_do_transaction_finish (proxy, async_result, error);
 +}
 +
 +typedef struct {
@@ -2180,49 +2405,23 @@ index 000000000..9edb8d741
 +	g_autoptr(GVariant) transaction = NULL;
 +	g_autoptr(GsDnf5ProgressHelper) helper = NULL;
 +	g_autoptr(GCancellable) run_cancellable = NULL;
-+	RepoKeyImportData repo_key_import_data;
 +	TransactionData transaction_data;
-+	gulong repo_key_import_id;
 +	gulong cancellable_id = 0;
 +	guint result = 0;
 +	gboolean interactive = (flags & GS_DNF5_TRANSACTION_FLAG_INTERACTIVE) != 0;
 +	gboolean success;
 +
-+	base_proxy = gs_dnf5_base_proxy_new_sync (self->connection,
-+						  G_DBUS_PROXY_FLAGS_DO_NOT_AUTO_START,
-+						  GS_DNF5_INTERFACE_RPM_DNF,
-+						  session_path,
-+						  cancellable,
-+						  error);
-+	if (base_proxy == NULL) {
-+		gs_dnf5_convert_error (error);
-+		g_prefix_error_literal (error, "Failed to create Base proxy: ");
++	base_proxy = gs_dnf5_ref_dbus_proxy_sync (self, session_path, GS_DNF5_PROXY_BASE, cancellable, error);
++	if (base_proxy == NULL)
 +		return FALSE;
-+	}
 +
-+	repo_proxy = gs_dnf5_rpm_repo_proxy_new_sync (self->connection,
-+						      G_DBUS_PROXY_FLAGS_DO_NOT_AUTO_START,
-+						      GS_DNF5_INTERFACE_RPM_DNF,
-+						      session_path,
-+						      cancellable,
-+						      error);
-+	if (repo_proxy == NULL) {
-+		gs_dnf5_convert_error (error);
-+		g_prefix_error_literal (error, "Failed to create Repo proxy: ");
++	repo_proxy = gs_dnf5_ref_dbus_proxy_sync (self, session_path, GS_DNF5_PROXY_RPM_REPO, cancellable, error);
++	if (repo_proxy == NULL)
 +		return FALSE;
-+	}
 +
-+	goal_proxy = gs_dnf5_goal_proxy_new_sync (self->connection,
-+						  G_DBUS_PROXY_FLAGS_DO_NOT_AUTO_START,
-+						  GS_DNF5_INTERFACE_RPM_DNF,
-+						  session_path,
-+						  cancellable,
-+						  error);
-+	if (goal_proxy == NULL) {
-+		gs_dnf5_convert_error (error);
-+		g_prefix_error_literal (error, "Failed to create Goal proxy: ");
++	goal_proxy = gs_dnf5_ref_dbus_proxy_sync (self, session_path, GS_DNF5_PROXY_GOAL, cancellable, error);
++	if (goal_proxy == NULL)
 +		return FALSE;
-+	}
 +
 +	g_dbus_proxy_set_default_timeout (G_DBUS_PROXY (goal_proxy), G_MAXINT);
 +
@@ -2234,14 +2433,6 @@ index 000000000..9edb8d741
 +	if (progress_app != NULL || progress_list != NULL)
 +		helper = gs_dnf5_progress_helper_new (base_proxy, rpm_proxy, progress_app, progress_list, session_path);
 +
-+	repo_key_import_data.self = self;
-+	repo_key_import_data.session_path = session_path;
-+	repo_key_import_data.repo_proxy = repo_proxy;
-+	repo_key_import_data.interactive = interactive;
-+	repo_key_import_data.cancellable = cancellable;
-+	repo_key_import_id = g_signal_connect (base_proxy, "repo_key_import_request",
-+					       G_CALLBACK (gs_dnf5_repo_key_import_request_cb), &repo_key_import_data);
-+
 +	if (!gs_dnf5_goal_call_resolve_sync (goal_proxy,
 +					     g_variant_builder_end (options_builder),
 +					     &transaction,
@@ -2250,7 +2441,6 @@ index 000000000..9edb8d741
 +					     error)) {
 +		gs_dnf5_convert_error (error);
 +		g_prefix_error_literal (error, "Failed to resolve transaction: ");
-+		g_signal_handler_disconnect (base_proxy, repo_key_import_id);
 +		return FALSE;
 +	}
 +
@@ -2275,16 +2465,13 @@ index 000000000..9edb8d741
 +				_("Unknown error"));
 +			g_prefix_error (error, "Failed to resolve transaction: ");
 +		}
-+		g_signal_handler_disconnect (base_proxy, repo_key_import_id);
 +		return FALSE;
 +	}
 +
 +	g_clear_pointer (&options_builder, g_variant_builder_unref);
 +
-+	if ((flags & GS_DNF5_TRANSACTION_FLAG_RESOLVE_ONLY) != 0) {
-+		g_signal_handler_disconnect (base_proxy, repo_key_import_id);
++	if ((flags & GS_DNF5_TRANSACTION_FLAG_RESOLVE_ONLY) != 0)
 +		return TRUE;
-+	}
 +
 +	options_builder = g_variant_builder_new (G_VARIANT_TYPE ("a{sv}"));
 +	if ((flags & GS_DNF5_TRANSACTION_FLAG_OFFLINE) != 0) {
@@ -2307,13 +2494,9 @@ index 000000000..9edb8d741
 +							&transaction_data, NULL);
 +	}
 +
-+	success = gs_dnf5_goal_call_do_transaction_sync_wrapper (goal_proxy,
-+								 g_variant_builder_end (options_builder),
-+								 run_cancellable,
-+								 error);
++	success = gs_dnf5_goal_call_do_transaction_sync (goal_proxy, g_variant_builder_end (options_builder), run_cancellable, error);
 +
 +	g_cancellable_disconnect (cancellable, cancellable_id);
-+	g_signal_handler_disconnect (base_proxy, repo_key_import_id);
 +
 +	/* in case there is a pending async call result for the cancel() invocation */
 +	g_cancellable_cancel (run_cancellable);
@@ -2605,6 +2788,10 @@ index 000000000..9edb8d741
 +		/* do not know the exact change date/time, it uses the build time and the one from the settings as a fallback */
 +		if (!gs_app_get_install_date (app))
 +			gs_app_set_install_date (app, rpd->timestamp);
++		/* clamp down to the settings time if needed, to not miss update notifications due to updates from command line */
++		else if (gs_app_get_install_date (app) > (guint64) rpd->timestamp)
++			gs_app_set_install_date (app, rpd->timestamp);
++
 +		gs_app_list_add (rpd->list, app);
 +	}
 +
@@ -2675,6 +2862,7 @@ index 000000000..9edb8d741
 +	g_autoptr(GsDnf5SessionManager) session_manager = NULL;
 +	g_autoptr(GsDnf5RpmRpm) rpm_proxy = NULL;
 +	g_autoptr(GError) local_error = NULL;
++	gboolean interactive = (data->flags & GS_PLUGIN_LIST_APPS_FLAGS_INTERACTIVE) != 0;
 +	gboolean success = TRUE;
 +
 +	assert_in_worker (self);
@@ -2701,24 +2889,15 @@ index 000000000..9edb8d741
 +		return;
 +	}
 +
-+	session_path = gs_dnf5_open_session (self, GS_DNF5_RELEASEVER_DEFAULT, &session_manager, cancellable, &local_error);
++	session_path = gs_dnf5_open_session (self, GS_DNF5_RELEASEVER_DEFAULT, interactive, &session_manager, cancellable, &local_error);
 +	if (session_path == NULL) {
 +		gs_dnf5_convert_error (&local_error);
 +		g_task_return_error (task, g_steal_pointer (&local_error));
 +		return;
 +	}
 +
-+	rpm_proxy = gs_dnf5_rpm_rpm_proxy_new_sync (self->connection,
-+						    G_DBUS_PROXY_FLAGS_DO_NOT_AUTO_START,
-+						    GS_DNF5_INTERFACE_RPM_DNF,
-+						    session_path,
-+						    cancellable,
-+						    &local_error);
++	rpm_proxy = gs_dnf5_ref_dbus_proxy_sync (self, session_path, GS_DNF5_PROXY_RPM_RPM, cancellable, &local_error);
 +	success = rpm_proxy != NULL;
-+	if (!success) {
-+		gs_dnf5_convert_error (&local_error);
-+		g_prefix_error_literal (&local_error, "Failed to create Rpm proxy: ");
-+	}
 +
 +	if (success) {
 +		g_dbus_proxy_set_default_timeout (G_DBUS_PROXY (rpm_proxy), G_MAXINT);
@@ -2800,34 +2979,38 @@ index 000000000..9edb8d741
 +					g_autoptr(GError) local_error2 = NULL;
 +					gboolean adv_success;
 +
-+					advisory_proxy = gs_dnf5_advisory_proxy_new_sync (self->connection,
-+											  G_DBUS_PROXY_FLAGS_DO_NOT_AUTO_START,
-+											  GS_DNF5_INTERFACE_RPM_DNF,
-+											  session_path,
-+											  cancellable,
-+											  &local_error2);
++					advisory_proxy = gs_dnf5_ref_dbus_proxy_sync (self, session_path, GS_DNF5_PROXY_ADVISORY, cancellable, &local_error2);
 +					adv_success = advisory_proxy != NULL;
 +
 +					if (adv_success) {
 +						g_autoptr(GVariantBuilder) adv_options_builder = NULL;
 +						g_autoptr(GVariantBuilder) attrs_builder = NULL;
-+						g_autoptr(GVariantBuilder) severities_builder = NULL;
++						g_autoptr(GVariantBuilder) pkgs_builder = NULL;
 +						g_autoptr(GVariant) adv_result = NULL;
++						GHashTableIter iter;
++						gpointer value = NULL;
 +
 +						attrs_builder = g_variant_builder_new (G_VARIANT_TYPE ("as"));
 +						g_variant_builder_add (attrs_builder, "s", "severity");
 +						g_variant_builder_add (attrs_builder, "s", "collections");
++						g_variant_builder_add (attrs_builder, "s", "description");
 +
-+						severities_builder = g_variant_builder_new (G_VARIANT_TYPE ("as"));
-+						g_variant_builder_add (severities_builder, "s", "critical");
++						pkgs_builder = g_variant_builder_new (G_VARIANT_TYPE ("as"));
++						g_hash_table_iter_init (&iter, nevra_to_app);
++						while (g_hash_table_iter_next (&iter, NULL, &value)) {
++							GsApp *app = value;
++
++							if (gs_app_get_default_source (app) != NULL)
++								g_variant_builder_add (pkgs_builder, "s", gs_app_get_default_source (app));
++						}
 +
 +						adv_options_builder = g_variant_builder_new (G_VARIANT_TYPE ("a{sv}"));
 +						g_variant_builder_add (adv_options_builder, "{sv}", "advisory_attrs",
 +								       g_variant_builder_end (attrs_builder));
 +						g_variant_builder_add (adv_options_builder, "{sv}", "availability",
 +								       g_variant_new_string ("updates"));
-+						g_variant_builder_add (adv_options_builder, "{sv}", "severities",
-+								       g_variant_builder_end (severities_builder));
++						g_variant_builder_add (adv_options_builder, "{sv}", "contains_pkgs",
++								       g_variant_builder_end (pkgs_builder));
 +
 +						adv_success = gs_dnf5_advisory_call_list_sync (advisory_proxy,
 +											       g_variant_builder_end (adv_options_builder),
@@ -2841,8 +3024,21 @@ index 000000000..9edb8d741
 +						} else {
 +							g_debug ("Failed to call Advisory::list: %s", local_error2->message);
 +						}
++
++						/* fallback to changelogs where advisory was not known */
++						g_hash_table_iter_init (&iter, nevra_to_app);
++						while (success && g_hash_table_iter_next (&iter, NULL, &value)) {
++							GsApp *app = value;
++							if (gs_app_get_update_details_markup (app) == NULL) {
++								const gchar *changelogs = gs_app_get_metadata_item (app, GS_DNF5_CHANGELOGS_KEY);
++								if (changelogs != NULL && *changelogs != '\0') {
++									gs_app_set_update_details_text (app, changelogs);
++									gs_app_set_metadata (app, GS_DNF5_CHANGELOGS_KEY, NULL);
++								}
++							}
++						}
 +					} else {
-+						g_debug ("Failed to create Advisory proxy: %s", local_error2->message);
++						g_debug ("%s", local_error2->message);
 +					}
 +				}
 +			} else {
@@ -2860,17 +3056,8 @@ index 000000000..9edb8d741
 +			if (timestamp > 0) {
 +				g_autoptr(GsDnf5History) history_proxy = NULL;
 +
-+				history_proxy = gs_dnf5_history_proxy_new_sync (self->connection,
-+										G_DBUS_PROXY_FLAGS_DO_NOT_AUTO_START,
-+										GS_DNF5_INTERFACE_RPM_DNF,
-+										session_path,
-+										cancellable,
-+										&local_error);
++				history_proxy = gs_dnf5_ref_dbus_proxy_sync (self, session_path, GS_DNF5_PROXY_HISTORY, cancellable, &local_error);
 +				success = history_proxy != NULL;
-+				if (!success) {
-+					gs_dnf5_convert_error (&local_error);
-+					g_prefix_error_literal (&local_error, "Failed to create History proxy: ");
-+				}
 +
 +				if (success) {
 +					g_autoptr(GVariantBuilder) options_builder = NULL;
@@ -2906,12 +3093,7 @@ index 000000000..9edb8d741
 +		} else if (gs_component_kind_array_contains (component_kinds, AS_COMPONENT_KIND_REPOSITORY)) {
 +			g_autoptr(GsDnf5RpmRepo) repo_proxy = NULL;
 +
-+			repo_proxy = gs_dnf5_rpm_repo_proxy_new_sync (self->connection,
-+								      G_DBUS_PROXY_FLAGS_DO_NOT_AUTO_START,
-+								      GS_DNF5_INTERFACE_RPM_DNF,
-+								      session_path,
-+								      cancellable,
-+								      &local_error);
++			repo_proxy = gs_dnf5_ref_dbus_proxy_sync (self, session_path, GS_DNF5_PROXY_RPM_REPO, cancellable, &local_error);
 +			success = repo_proxy != NULL;
 +			if (success) {
 +				g_autoptr(GVariantBuilder) options_builder = NULL;
@@ -2943,9 +3125,6 @@ index 000000000..9edb8d741
 +					gs_dnf5_convert_error (&local_error);
 +					g_prefix_error_literal (&local_error, "Failed to call list: ");
 +				}
-+			} else {
-+				gs_dnf5_convert_error (&local_error);
-+				g_prefix_error_literal (&local_error, "Failed to create Rpm repo proxy: ");
 +			}
 +		} else if (provides_files != NULL) {
 +			g_autoptr(GVariantBuilder) patterns_builder = NULL;
@@ -3199,24 +3378,15 @@ index 000000000..9edb8d741
 +		g_mutex_unlock (&self->dependency_sizes_data.mutex);
 +
 +		/* need to use temporary session, because the goals are piled up and cannot be cancelled yet */
-+		session_path = gs_dnf5_open_session (self, GS_DNF5_RELEASEVER_DEFAULT, &session_manager, cancellable, &local_error);
++		session_path = gs_dnf5_open_session (self, GS_DNF5_RELEASEVER_DEFAULT, FALSE, &session_manager, cancellable, &local_error);
 +
 +		success = session_path != NULL;
 +		if (!success)
 +			gs_dnf5_convert_error (&local_error);
 +
 +		if (success) {
-+			rpm_proxy = gs_dnf5_rpm_rpm_proxy_new_sync (self->connection,
-+								    G_DBUS_PROXY_FLAGS_DO_NOT_AUTO_START,
-+								    GS_DNF5_INTERFACE_RPM_DNF,
-+								    session_path,
-+								    cancellable,
-+								    &local_error);
++			rpm_proxy = gs_dnf5_ref_dbus_proxy_sync (self, session_path, GS_DNF5_PROXY_RPM_RPM, cancellable, &local_error);
 +			success = rpm_proxy != NULL;
-+			if (!success) {
-+				gs_dnf5_convert_error (&local_error);
-+				g_prefix_error_literal (&local_error, "Failed to create Rpm proxy: ");
-+			}
 +		}
 +
 +		if (success) {
@@ -3334,17 +3504,27 @@ index 000000000..9edb8d741
 +		return TRUE;
 +
 +	if (gs_app_has_management_plugin (app, NULL) &&
-+	    gs_app_get_bundle_kind (app) == AS_BUNDLE_KIND_PACKAGE &&
-+	    gs_app_get_scope (app) == AS_COMPONENT_SCOPE_SYSTEM) {
++	    gs_app_get_bundle_kind (app) == AS_BUNDLE_KIND_PACKAGE) {
 +		gs_app_set_management_plugin (app, GS_PLUGIN (self));
 +		gs_plugin_dnf5_set_packaging_format (app);
 +	}
 +
-+	gs_dnf5_app_set_version (dict, app, gs_app_set_version);
 +	gs_dnf5_app_set_size (dict, "install_size", app, gs_app_set_size_installed);
 +	gs_dnf5_app_set_size (dict, "download_size", app, gs_app_set_size_download);
 +
-+	gs_dnf5_update_app_state (app, GS_APP_STATE_UNKNOWN, dict);
++	if (gs_app_get_state (app) == GS_APP_STATE_AVAILABLE_LOCAL) {
++		g_autoptr(GVariant) is_installed = NULL;
++		is_installed = g_variant_dict_lookup_value (dict, "is_installed", G_VARIANT_TYPE_BOOLEAN);
++		if (is_installed != NULL && g_variant_get_boolean (is_installed)) {
++			g_autofree gchar *ver_str = gs_dnf5_dup_version_from_dict (dict);
++			const gchar *app_version = gs_app_get_version (app);
++			if (ver_str != NULL && app_version != NULL && gs_utils_compare_versions (app_version, ver_str) <= 0)
++				gs_app_set_state (app, GS_APP_STATE_INSTALLED);
++		}
++	} else {
++		gs_dnf5_app_set_version (dict, app, gs_app_set_version);
++		gs_dnf5_update_app_state (app, GS_APP_STATE_UNKNOWN, dict);
++	}
 +
 +	return TRUE;
 +}
@@ -3459,8 +3639,7 @@ index 000000000..9edb8d741
 +		      gs_app_list_length (gs_app_get_related (app)) == 0))) {
 +			if (gs_app_get_default_source (app) != NULL &&
 +			    ((gs_app_has_management_plugin (app, NULL) &&
-+			      gs_app_get_bundle_kind (app) == AS_BUNDLE_KIND_PACKAGE &&
-+			      gs_app_get_scope (app) == AS_COMPONENT_SCOPE_SYSTEM) ||
++			      gs_app_get_bundle_kind (app) == AS_BUNDLE_KIND_PACKAGE) ||
 +			     gs_app_has_management_plugin (app, plugin)))
 +				g_hash_table_insert (apps, g_strdup (gs_app_get_default_source (app)), g_object_ref (app));
 +		}
@@ -3471,24 +3650,16 @@ index 000000000..9edb8d741
 +		return;
 +	}
 +
-+	session_path = gs_dnf5_open_session (self, GS_DNF5_RELEASEVER_DEFAULT, &session_manager, cancellable, &local_error);
++	session_path = gs_dnf5_open_session (self, GS_DNF5_RELEASEVER_DEFAULT, (data->job_flags & GS_PLUGIN_REFINE_FLAGS_INTERACTIVE) != 0,
++					     &session_manager, cancellable, &local_error);
 +	if (session_path == NULL) {
 +		gs_dnf5_convert_error (&local_error);
 +		g_task_return_error (task, g_steal_pointer (&local_error));
 +		return;
 +	}
 +
-+	rpm_proxy = gs_dnf5_rpm_rpm_proxy_new_sync (self->connection,
-+						    G_DBUS_PROXY_FLAGS_DO_NOT_AUTO_START,
-+						    GS_DNF5_INTERFACE_RPM_DNF,
-+						    session_path,
-+						    cancellable,
-+						    &local_error);
++	rpm_proxy = gs_dnf5_ref_dbus_proxy_sync (self, session_path, GS_DNF5_PROXY_RPM_RPM, cancellable, &local_error);
 +	success = rpm_proxy != NULL;
-+	if (!success) {
-+		gs_dnf5_convert_error (&local_error);
-+		g_prefix_error_literal (&local_error, "Failed to create Rpm proxy: ");
-+	}
 +
 +	if (success && (data->require_flags & GS_PLUGIN_REFINE_REQUIRE_FLAGS_UPDATE_DETAILS) != 0) {
 +		g_autoptr(GHashTable) advisories = NULL; /* gchar *name ~> gchar *description */
@@ -3504,6 +3675,9 @@ index 000000000..9edb8d741
 +			GsApp *app = value;
 +			GVariant *advisories_array;
 +
++			if (gs_app_get_update_details_markup (app) != NULL)
++				continue;
++
 +			advisories_array = gs_app_get_metadata_variant (app, GS_DNF5_ADVISORIES_KEY);
 +			if (advisories_array != NULL)
 +				success = gs_dnf5_foreach_item (self, advisories_array, gs_dnf5_add_advisories_cb, advisories, cancellable, &local_error);
@@ -3512,12 +3686,7 @@ index 000000000..9edb8d741
 +		if (success && g_hash_table_size (advisories) > 0) {
 +			g_autoptr(GsDnf5Advisory) advisory_proxy = NULL;
 +
-+			advisory_proxy = gs_dnf5_advisory_proxy_new_sync (self->connection,
-+									  G_DBUS_PROXY_FLAGS_DO_NOT_AUTO_START,
-+									  GS_DNF5_INTERFACE_RPM_DNF,
-+									  session_path,
-+									  cancellable,
-+									  &local_error);
++			advisory_proxy = gs_dnf5_ref_dbus_proxy_sync (self, session_path, GS_DNF5_PROXY_ADVISORY, cancellable, &local_error);
 +			success = advisory_proxy != NULL;
 +
 +			if (success) {
@@ -3592,7 +3761,7 @@ index 000000000..9edb8d741
 +					g_debug ("Failed to call Advisory::list: %s", local_error->message);
 +				}
 +			} else {
-+				g_debug ("Failed to create Advisory proxy: %s", local_error->message);
++				g_debug ("%s", local_error->message);
 +			}
 +		}
 +
@@ -3630,6 +3799,7 @@ index 000000000..9edb8d741
 +		attrs_builder = g_variant_builder_new (G_VARIANT_TYPE ("as"));
 +		g_variant_builder_add (attrs_builder, "s", "name");
 +		g_variant_builder_add (attrs_builder, "s", "version");
++		g_variant_builder_add (attrs_builder, "s", "release");
 +		g_variant_builder_add (attrs_builder, "s", "install_size");
 +		g_variant_builder_add (attrs_builder, "s", "download_size");
 +		g_variant_builder_add (attrs_builder, "s", "is_installed");
@@ -3729,28 +3899,26 @@ index 000000000..9edb8d741
 +	g_autofree gchar *session_path = NULL;
 +	g_autoptr(GsDnf5SessionManager) session_manager = NULL;
 +	g_autoptr(GsDnf5Base) base_proxy = NULL;
++	g_autoptr(GsDnf5RpmRepo) repo_proxy = NULL;
 +	g_autoptr(GError) local_error = NULL;
 +	gboolean success = TRUE;
++	gboolean interactive = (data->flags & GS_PLUGIN_REFRESH_METADATA_FLAGS_INTERACTIVE) != 0;
 +
 +	assert_in_worker (self);
 +
-+	session_path = gs_dnf5_open_session (self, GS_DNF5_RELEASEVER_DEFAULT, &session_manager, cancellable, &local_error);
++	session_path = gs_dnf5_open_session (self, GS_DNF5_RELEASEVER_DEFAULT, interactive, &session_manager, cancellable, &local_error);
 +	if (session_path == NULL) {
 +		gs_dnf5_convert_error (&local_error);
 +		g_task_return_error (task, g_steal_pointer (&local_error));
 +		return;
 +	}
 +
-+	base_proxy = gs_dnf5_base_proxy_new_sync (self->connection,
-+						  G_DBUS_PROXY_FLAGS_DO_NOT_AUTO_START,
-+						  GS_DNF5_INTERFACE_RPM_DNF,
-+						  session_path,
-+						  cancellable,
-+						  &local_error);
++	base_proxy = gs_dnf5_ref_dbus_proxy_sync (self, session_path, GS_DNF5_PROXY_BASE, cancellable, &local_error);
 +	success = base_proxy != NULL;
-+	if (!success) {
-+		gs_dnf5_convert_error (&local_error);
-+		g_prefix_error_literal (&local_error, "Failed to create Base proxy: ");
++
++	if (success) {
++		repo_proxy = gs_dnf5_ref_dbus_proxy_sync (self, session_path, GS_DNF5_PROXY_RPM_REPO, cancellable, &local_error);
++		success = repo_proxy != NULL;
 +	}
 +
 +	if (success && data->cache_age_secs < 60) {
@@ -3761,7 +3929,7 @@ index 000000000..9edb8d741
 +		options_builder = g_variant_builder_new (G_VARIANT_TYPE ("a{sv}"));
 +
 +		g_variant_builder_add (options_builder, "{sv}", "interactive",
-+				       g_variant_new_boolean ((data->flags & GS_PLUGIN_REFRESH_METADATA_FLAGS_INTERACTIVE) != 0));
++				       g_variant_new_boolean (interactive));
 +
 +		success = gs_dnf5_base_call_clean_with_options_sync (base_proxy,
 +								     "expire-cache",
@@ -3842,8 +4010,7 @@ index 000000000..9edb8d741
 +gs_dnf5_adopt_app (GsPlugin *plugin,
 +		   GsApp *app)
 +{
-+	if (gs_app_get_bundle_kind (app) == AS_BUNDLE_KIND_PACKAGE &&
-+	    gs_app_get_scope (app) == AS_COMPONENT_SCOPE_SYSTEM) {
++	if (gs_app_get_bundle_kind (app) == AS_BUNDLE_KIND_PACKAGE) {
 +		gs_app_set_management_plugin (app, plugin);
 +		gs_plugin_dnf5_set_packaging_format (app);
 +		return;
@@ -3941,7 +4108,7 @@ index 000000000..9edb8d741
 +		return FALSE;
 +	}
 +
-+	session_path = gs_dnf5_open_session (self, GS_DNF5_RELEASEVER_DEFAULT, &session_manager, cancellable, error);
++	session_path = gs_dnf5_open_session (self, GS_DNF5_RELEASEVER_DEFAULT, interactive, &session_manager, cancellable, error);
 +	if (session_path == NULL) {
 +		gs_dnf5_convert_error (error);
 +		return FALSE;
@@ -3973,12 +4140,7 @@ index 000000000..9edb8d741
 +		}
 +	}
 +
-+	rpm_proxy = gs_dnf5_rpm_rpm_proxy_new_sync (self->connection,
-+						    G_DBUS_PROXY_FLAGS_DO_NOT_AUTO_START,
-+						    GS_DNF5_INTERFACE_RPM_DNF,
-+						    session_path,
-+						    cancellable,
-+						    error);
++	rpm_proxy = gs_dnf5_ref_dbus_proxy_sync (self, session_path, GS_DNF5_PROXY_RPM_RPM, cancellable, error);
 +	success = rpm_proxy != NULL;
 +	if (success) {
 +		g_autoptr(GVariantBuilder) options_builder = NULL;
@@ -4019,12 +4181,7 @@ index 000000000..9edb8d741
 +			/* ensure the update is finished with the 'reboot' action */
 +			g_autoptr(GsDnf5Offline) offline_proxy = NULL;
 +
-+			offline_proxy = gs_dnf5_offline_proxy_new_sync (self->connection,
-+									G_DBUS_PROXY_FLAGS_DO_NOT_AUTO_START,
-+									GS_DNF5_INTERFACE_RPM_DNF,
-+									session_path,
-+									cancellable,
-+									error);
++			offline_proxy = gs_dnf5_ref_dbus_proxy_sync (self, session_path, GS_DNF5_PROXY_OFFLINE, cancellable, error);
 +			success = offline_proxy != NULL;
 +			if (success) {
 +				g_autofree gchar *op_error_msg = NULL;
@@ -4057,14 +4214,8 @@ index 000000000..9edb8d741
 +					/* to check anything installed/updated after today */
 +					g_settings_set (settings, "packagekit-historical-updates-timestamp", "t", g_get_real_time () / G_USEC_PER_SEC);
 +				}
-+			} else {
-+				gs_dnf5_convert_error (error);
-+				g_prefix_error_literal (error, "Failed to create Offline proxy: ");
 +			}
 +		}
-+	} else {
-+		gs_dnf5_convert_error (error);
-+		g_prefix_error_literal (error, "Failed to create Rpm proxy: ");
 +	}
 +
 +	gs_dnf5_close_session (self, session_manager, session_path);
@@ -4253,7 +4404,8 @@ index 000000000..9edb8d741
 +		return;
 +	}
 +
-+	session_path = gs_dnf5_open_session (self, GS_DNF5_RELEASEVER_DEFAULT, &session_manager, cancellable, &local_error);
++	session_path = gs_dnf5_open_session (self, GS_DNF5_RELEASEVER_DEFAULT, (data->flags & GS_PLUGIN_UNINSTALL_APPS_FLAGS_INTERACTIVE) != 0,
++					     &session_manager, cancellable, &local_error);
 +	if (session_path == NULL) {
 +		gs_dnf5_convert_error (&local_error);
 +		g_task_return_error (task, g_steal_pointer (&local_error));
@@ -4262,12 +4414,7 @@ index 000000000..9edb8d741
 +
 +	g_atomic_int_inc (&self->calling_rpm);
 +
-+	rpm_proxy = gs_dnf5_rpm_rpm_proxy_new_sync (self->connection,
-+						    G_DBUS_PROXY_FLAGS_DO_NOT_AUTO_START,
-+						    GS_DNF5_INTERFACE_RPM_DNF,
-+						    session_path,
-+						    cancellable,
-+						    &local_error);
++	rpm_proxy = gs_dnf5_ref_dbus_proxy_sync (self, session_path, GS_DNF5_PROXY_RPM_RPM, cancellable, &local_error);
 +	success = rpm_proxy != NULL;
 +	if (success) {
 +		GsDnf5TransactionFlags flags = (data->flags & GS_PLUGIN_UNINSTALL_APPS_FLAGS_INTERACTIVE) != 0 ?
@@ -4292,9 +4439,6 @@ index 000000000..9edb8d741
 +							    cancellable,
 +							    &local_error);
 +		success = success && gs_dnf5_run_transaction (self, session_path, rpm_proxy, progress_app, NULL, flags, NULL, cancellable, &local_error);
-+	} else {
-+		gs_dnf5_convert_error (&local_error);
-+		g_prefix_error_literal (&local_error, "Failed to create Rpm proxy: ");
 +	}
 +
 +	gs_dnf5_close_session (self, session_manager, session_path);
@@ -4456,23 +4600,14 @@ index 000000000..9edb8d741
 +		return FALSE;
 +	}
 +
-+	session_path = gs_dnf5_open_session (self, GS_DNF5_RELEASEVER_DEFAULT, &session_manager, cancellable, error);
++	session_path = gs_dnf5_open_session (self, GS_DNF5_RELEASEVER_DEFAULT, interactive, &session_manager, cancellable, error);
 +	if (session_path == NULL) {
 +		gs_dnf5_convert_error (error);
 +		return FALSE;
 +	}
 +
-+	repo_proxy = gs_dnf5_rpm_repo_proxy_new_sync (self->connection,
-+						      G_DBUS_PROXY_FLAGS_DO_NOT_AUTO_START,
-+						      GS_DNF5_INTERFACE_RPM_DNF,
-+						      session_path,
-+						      cancellable,
-+						      error);
++	repo_proxy = gs_dnf5_ref_dbus_proxy_sync (self, session_path, GS_DNF5_PROXY_RPM_REPO, cancellable, error);
 +	success = repo_proxy != NULL;
-+	if (!success) {
-+		gs_dnf5_convert_error (error);
-+		g_prefix_error_literal (error, "Failed to create Rpm proxy: ");
-+	}
 +
 +	if (success) {
 +		const gchar *ids[2] = { NULL, NULL };
@@ -4507,19 +4642,10 @@ index 000000000..9edb8d741
 +		g_autoptr(GError) local_error = NULL;
 +		gboolean success2;
 +
-+		base_proxy = gs_dnf5_base_proxy_new_sync (self->connection,
-+							  G_DBUS_PROXY_FLAGS_DO_NOT_AUTO_START,
-+							  GS_DNF5_INTERFACE_RPM_DNF,
-+							  session_path,
-+							  cancellable,
-+							  &local_error);
++		base_proxy = gs_dnf5_ref_dbus_proxy_sync (self, session_path, GS_DNF5_PROXY_BASE, cancellable, &local_error);
 +		success2 = base_proxy != NULL;
-+		if (success2) {
++		if (success2)
 +			success2 = gs_dnf5_reset_session_sync (self, session_path, cancellable, &local_error);
-+		} else {
-+			gs_dnf5_convert_error (&local_error);
-+			g_prefix_error_literal (&local_error, "Failed to create Base proxy: ");
-+		}
 +
 +		if (success2) {
 +			gboolean result = FALSE;
@@ -4695,6 +4821,7 @@ index 000000000..9edb8d741
 +gs_dnf5_file_to_app_sync (GsPluginDnf5 *self,
 +			  GsAppList *list,
 +			  GFile *file,
++			  gboolean interactive,
 +			  GCancellable *cancellable,
 +			  GError **error)
 +{
@@ -4718,23 +4845,14 @@ index 000000000..9edb8d741
 +	if (!g_strv_contains (mimetypes, content_type))
 +		return TRUE;
 +
-+	session_path = gs_dnf5_open_session (self, GS_DNF5_RELEASEVER_DEFAULT, &session_manager, cancellable, error);
++	session_path = gs_dnf5_open_session (self, GS_DNF5_RELEASEVER_DEFAULT, interactive, &session_manager, cancellable, error);
 +	if (session_path == NULL) {
 +		gs_dnf5_convert_error (error);
 +		return FALSE;
 +	}
 +
-+	rpm_proxy = gs_dnf5_rpm_rpm_proxy_new_sync (self->connection,
-+						    G_DBUS_PROXY_FLAGS_DO_NOT_AUTO_START,
-+						    GS_DNF5_INTERFACE_RPM_DNF,
-+						    session_path,
-+						    cancellable,
-+						    error);
++	rpm_proxy = gs_dnf5_ref_dbus_proxy_sync (self, session_path, GS_DNF5_PROXY_RPM_RPM, cancellable, error);
 +	success = rpm_proxy != NULL;
-+	if (!success) {
-+		gs_dnf5_convert_error (error);
-+		g_prefix_error_literal (error, "Failed to create Rpm proxy: ");
-+	}
 +
 +	if (success) {
 +		g_autoptr(GVariantBuilder) options_builder = NULL;
@@ -4809,7 +4927,7 @@ index 000000000..9edb8d741
 +	GsPluginDnf5 *self = GS_PLUGIN_DNF5 (source_object);
 +	GsPluginFileToAppData *data = task_data;
 +
-+	if (gs_dnf5_file_to_app_sync (self, list, data->file, cancellable, &local_error)) {
++	if (gs_dnf5_file_to_app_sync (self, list, data->file, (data->flags & GS_PLUGIN_FILE_TO_APP_FLAGS_INTERACTIVE) != 0, cancellable, &local_error)) {
 +		g_task_return_pointer (task, g_steal_pointer (&list), g_object_unref);
 +	} else if (local_error != NULL) {
 +		g_task_return_error (task, g_steal_pointer (&local_error));
@@ -4864,36 +4982,18 @@ index 000000000..9edb8d741
 +	g_autoptr(GsDnf5RpmRpm) rpm_proxy = NULL;
 +	gboolean success;
 +
-+	session_path = gs_dnf5_open_session (self, releasever, &session_manager, cancellable, error);
++	session_path = gs_dnf5_open_session (self, releasever, interactive, &session_manager, cancellable, error);
 +	if (session_path == NULL) {
 +		gs_dnf5_convert_error (error);
 +		return FALSE;
 +	}
 +
-+	rpm_proxy = gs_dnf5_rpm_rpm_proxy_new_sync (self->connection,
-+						    G_DBUS_PROXY_FLAGS_DO_NOT_AUTO_START,
-+						    GS_DNF5_INTERFACE_RPM_DNF,
-+						    session_path,
-+						    cancellable,
-+						    error);
++	rpm_proxy = gs_dnf5_ref_dbus_proxy_sync (self, session_path, GS_DNF5_PROXY_RPM_RPM, cancellable, error);
 +	success = rpm_proxy != NULL;
-+	if (!success) {
-+		gs_dnf5_convert_error (error);
-+		g_prefix_error_literal (error, "Failed to create Rpm proxy: ");
-+	}
 +
 +	if (success) {
-+		offline_proxy = gs_dnf5_offline_proxy_new_sync (self->connection,
-+								G_DBUS_PROXY_FLAGS_DO_NOT_AUTO_START,
-+								GS_DNF5_INTERFACE_RPM_DNF,
-+								session_path,
-+								cancellable,
-+								error);
++		offline_proxy = gs_dnf5_ref_dbus_proxy_sync (self, session_path, GS_DNF5_PROXY_OFFLINE, cancellable, error);
 +		success = offline_proxy != NULL;
-+		if (!success) {
-+			gs_dnf5_convert_error (error);
-+			g_prefix_error_literal (error, "Failed to create Offline proxy: ");
-+		}
 +	}
 +
 +	if (success) {
@@ -5060,6 +5160,9 @@ index 000000000..9edb8d741
 +	if (gs_dnf5_system_upgrade_sync (self, gs_app_get_version (data->app), data->app, FALSE,
 +					 (data->flags & GS_PLUGIN_TRIGGER_UPGRADE_FLAGS_INTERACTIVE) != 0,
 +					 cancellable, &local_error)) {
++		g_autoptr(GSettings) settings = g_settings_new ("org.gnome.software");
++		/* to check anything installed/updated after today */
++		g_settings_set (settings, "packagekit-historical-updates-timestamp", "t", g_get_real_time () / G_USEC_PER_SEC);
 +		gs_app_set_state (data->app, GS_APP_STATE_UPDATABLE);
 +		g_task_return_boolean (task, TRUE);
 +	} else {
@@ -5126,24 +5229,16 @@ index 000000000..9edb8d741
 +	gboolean success;
 +	g_autoptr(GError) local_error = NULL;
 +
-+	session_path = gs_dnf5_open_session (self, GS_DNF5_RELEASEVER_TEMPORARY_NO_REPO, &session_manager, cancellable, &local_error);
++	session_path = gs_dnf5_open_session (self, GS_DNF5_RELEASEVER_TEMPORARY_NO_REPO, (data->flags & GS_PLUGIN_CANCEL_OFFLINE_UPDATE_FLAGS_INTERACTIVE) != 0,
++					     &session_manager, cancellable, &local_error);
 +	if (session_path == NULL) {
 +		gs_dnf5_convert_error (&local_error);
 +		g_task_return_error (task, g_steal_pointer (&local_error));
 +		return;
 +	}
 +
-+	offline_proxy = gs_dnf5_offline_proxy_new_sync (self->connection,
-+							G_DBUS_PROXY_FLAGS_DO_NOT_AUTO_START,
-+							GS_DNF5_INTERFACE_RPM_DNF,
-+							session_path,
-+							cancellable,
-+							&local_error);
++	offline_proxy = gs_dnf5_ref_dbus_proxy_sync (self, session_path, GS_DNF5_PROXY_OFFLINE, cancellable, &local_error);
 +	success = offline_proxy != NULL;
-+	if (!success) {
-+		gs_dnf5_convert_error (&local_error);
-+		g_prefix_error_literal (&local_error, "Failed to create Offline proxy: ");
-+	}
 +
 +	if (success) {
 +		gboolean pending = FALSE;
@@ -5208,6 +5303,21 @@ index 000000000..9edb8d741
 +	return g_task_propagate_boolean (G_TASK (result), error);
 +}
 +
++static gboolean
++gs_dnf5_check_offline_transaction_has_prepared (GVariant *transaction_status)
++{
++	g_autofree gchar *status = NULL;
++	gboolean has_prepared = FALSE;
++
++	if (transaction_status == NULL)
++		return FALSE;
++
++	has_prepared = g_variant_lookup (transaction_status, "status", "s", &status) &&
++		(g_strcmp0 (status, "ready") == 0 || g_strcmp0 (status, "download-complete") == 0);
++
++	return has_prepared;
++}
++
 +/* Runs in a dedicated thread, not @worker. */
 +static void
 +gs_dnf5_get_offline_update_state_thread_cb (GTask *task,
@@ -5216,47 +5326,43 @@ index 000000000..9edb8d741
 +					    GCancellable *cancellable)
 +{
 +	GsPluginDnf5 *self = GS_PLUGIN_DNF5 (source_object);
++	GsPluginGetOfflineUpdateStateData *data = task_data;
 +	g_autofree gchar *session_path = NULL;
 +	g_autoptr(GsAppList) list = NULL;
 +	g_autoptr(GsDnf5SessionManager) session_manager = NULL;
 +	g_autoptr(GsDnf5Offline) offline_proxy = NULL;
++	GsPluginOfflineUpdateState state = GS_PLUGIN_OFFLINE_UPDATE_STATE_NONE;
 +	gboolean success;
-+	gboolean has_prepared = FALSE;
 +	g_autoptr(GError) local_error = NULL;
 +
-+	session_path = gs_dnf5_open_session (self, GS_DNF5_RELEASEVER_TEMPORARY_NO_REPO, &session_manager, cancellable, &local_error);
++	session_path = gs_dnf5_open_session (self, GS_DNF5_RELEASEVER_TEMPORARY_NO_REPO, (data->flags & GS_PLUGIN_GET_OFFLINE_UPDATE_STATE_FLAGS_INTERACTIVE) != 0,
++					     &session_manager, cancellable, &local_error);
 +	if (session_path == NULL) {
 +		gs_dnf5_convert_error (&local_error);
 +		g_task_return_error (task, g_steal_pointer (&local_error));
 +		return;
 +	}
 +
-+	offline_proxy = gs_dnf5_offline_proxy_new_sync (self->connection,
-+							G_DBUS_PROXY_FLAGS_DO_NOT_AUTO_START,
-+							GS_DNF5_INTERFACE_RPM_DNF,
-+							session_path,
-+							cancellable,
-+							&local_error);
++	offline_proxy = gs_dnf5_ref_dbus_proxy_sync (self, session_path, GS_DNF5_PROXY_OFFLINE, cancellable, &local_error);
 +	success = offline_proxy != NULL;
-+	if (!success) {
-+		gs_dnf5_convert_error (&local_error);
-+		g_prefix_error_literal (&local_error, "Failed to create Offline proxy: ");
-+	}
 +
 +	if (success) {
 +		gboolean pending = FALSE;
 +		g_autoptr(GVariant) transaction_status = NULL;
 +
 +		success = gs_dnf5_offline_call_get_status_sync (offline_proxy, &pending, &transaction_status, cancellable, &local_error);
-+		/* it can be prepared, but not scheduled, thus check for the magic directory (usually symlink) existence too */
-+		has_prepared = success && pending && transaction_status != NULL &&
-+			       g_file_test ("/system-update", G_FILE_TEST_IS_DIR);
++
++		/* "pending" means "scheduled for the next boot" here */
++		if (success && pending && transaction_status != NULL)
++			state = GS_PLUGIN_OFFLINE_UPDATE_STATE_SCHEDULED;
++		else if (success && gs_dnf5_check_offline_transaction_has_prepared (transaction_status))
++			state = GS_PLUGIN_OFFLINE_UPDATE_STATE_PREPARED;
 +	}
 +
 +	gs_dnf5_close_session (self, session_manager, session_path);
 +
 +	if (success) {
-+		g_task_return_int (task, has_prepared ? GS_PLUGIN_OFFLINE_UPDATE_STATE_SCHEDULED : GS_PLUGIN_OFFLINE_UPDATE_STATE_NONE);
++		g_task_return_int (task, state);
 +	} else {
 +		gs_dnf5_convert_error (&local_error);
 +		g_task_return_error (task, g_steal_pointer (&local_error));
@@ -5309,54 +5415,77 @@ index 000000000..9edb8d741
 +	gboolean success;
 +	g_autoptr(GError) local_error = NULL;
 +
-+	session_path = gs_dnf5_open_session (self, GS_DNF5_RELEASEVER_TEMPORARY_NO_REPO, &session_manager, cancellable, &local_error);
++	session_path = gs_dnf5_open_session (self, GS_DNF5_RELEASEVER_TEMPORARY_NO_REPO, (data->flags & GS_PLUGIN_SET_OFFLINE_UPDATE_ACTION_FLAGS_INTERACTIVE) != 0,
++					     &session_manager, cancellable, &local_error);
 +	if (session_path == NULL) {
 +		gs_dnf5_convert_error (&local_error);
 +		g_task_return_error (task, g_steal_pointer (&local_error));
 +		return;
 +	}
 +
-+	offline_proxy = gs_dnf5_offline_proxy_new_sync (self->connection,
-+							G_DBUS_PROXY_FLAGS_DO_NOT_AUTO_START,
-+							GS_DNF5_INTERFACE_RPM_DNF,
-+							session_path,
-+							cancellable,
-+							&local_error);
++	offline_proxy = gs_dnf5_ref_dbus_proxy_sync (self, session_path, GS_DNF5_PROXY_OFFLINE, cancellable, &local_error);
 +	success = offline_proxy != NULL;
-+	if (!success) {
-+		gs_dnf5_convert_error (&local_error);
-+		g_prefix_error_literal (&local_error, "Failed to create Offline proxy: ");
-+	}
 +
 +	if (success) {
 +		gboolean pending = FALSE;
 +		g_autoptr(GVariant) transaction_status = NULL;
 +
-+		if (gs_dnf5_offline_call_get_status_sync (offline_proxy, &pending, &transaction_status, cancellable, &local_error) &&
-+		    pending && transaction_status != NULL) {
-+			g_autoptr(GVariantBuilder) options_builder = NULL;
-+			g_autofree gchar *op_error_msg = NULL;
-+			gboolean is_reboot = (data->flags & GS_PLUGIN_SET_OFFLINE_UPDATE_ACTION_FLAGS_SHUTDOWN) == 0;
-+			gboolean op_success = FALSE;
++		if (gs_dnf5_offline_call_get_status_sync (offline_proxy, &pending, &transaction_status, cancellable, &local_error)) {
++			gboolean can_do = pending && transaction_status != NULL;
 +
-+			options_builder = g_variant_builder_new (G_VARIANT_TYPE ("a{sv}"));
-+			g_variant_builder_add (options_builder, "{sv}", "interactive",
-+					       g_variant_new_boolean ((data->flags & GS_PLUGIN_SET_OFFLINE_UPDATE_ACTION_FLAGS_INTERACTIVE) != 0));
++			if (!can_do && gs_dnf5_check_offline_transaction_has_prepared (transaction_status))
++				can_do = TRUE;
 +
-+			success = gs_dnf5_offline_call_set_finish_action_with_options_sync (offline_proxy,
-+											    is_reboot ? "reboot" : "poweroff",
-+											    g_variant_builder_end (options_builder),
-+											    &op_success, &op_error_msg, cancellable, &local_error);
-+			if (!success) {
-+				gs_dnf5_convert_error (&local_error);
-+				g_prefix_error_literal (&local_error, "Failed to call OfflineProxy::set_finish_action: ");
-+			} else if (!op_success) {
-+				success = FALSE;
-+				if (op_error_msg != NULL) {
-+					g_set_error_literal (&local_error, GS_PLUGIN_ERROR, GS_PLUGIN_ERROR_FAILED, op_error_msg);
-+					g_prefix_error_literal (&local_error, "Failed to call OfflineProxy::set_finish_action op: ");
-+				} else {
-+					g_set_error_literal (&local_error, GS_PLUGIN_ERROR, GS_PLUGIN_ERROR_FAILED, "Failed to call OfflineProxy::set_finish_action op");
++			if (can_do) {
++				g_autoptr(GVariantBuilder) options_builder = NULL;
++				g_autofree gchar *op_error_msg = NULL;
++				gboolean is_reboot = (data->flags & GS_PLUGIN_SET_OFFLINE_UPDATE_ACTION_FLAGS_SHUTDOWN) == 0;
++				gboolean op_success = FALSE;
++
++				options_builder = g_variant_builder_new (G_VARIANT_TYPE ("a{sv}"));
++				g_variant_builder_add (options_builder, "{sv}", "interactive",
++						       g_variant_new_boolean ((data->flags & GS_PLUGIN_SET_OFFLINE_UPDATE_ACTION_FLAGS_INTERACTIVE) != 0));
++
++				success = gs_dnf5_offline_call_set_finish_action_with_options_sync (offline_proxy,
++												    is_reboot ? "reboot" : "poweroff",
++												    g_variant_builder_end (options_builder),
++												    &op_success, &op_error_msg, cancellable, &local_error);
++				if (!success) {
++					gs_dnf5_convert_error (&local_error);
++					g_prefix_error_literal (&local_error, "Failed to call OfflineProxy::set_finish_action: ");
++				} else if (!op_success) {
++					success = FALSE;
++					if (op_error_msg != NULL) {
++						g_set_error_literal (&local_error, GS_PLUGIN_ERROR, GS_PLUGIN_ERROR_FAILED, op_error_msg);
++						g_prefix_error_literal (&local_error, "Failed to call OfflineProxy::set_finish_action op: ");
++					} else {
++						g_set_error_literal (&local_error, GS_PLUGIN_ERROR, GS_PLUGIN_ERROR_FAILED, "Failed to call OfflineProxy::set_finish_action op");
++					}
++				}
++
++				if (success) {
++					g_clear_pointer (&options_builder, g_variant_builder_unref);
++					g_clear_pointer (&op_error_msg, g_free);
++
++					options_builder = g_variant_builder_new (G_VARIANT_TYPE ("a{sv}"));
++					g_variant_builder_add (options_builder, "{sv}", "interactive",
++							       g_variant_new_boolean ((data->flags & GS_PLUGIN_SET_OFFLINE_UPDATE_ACTION_FLAGS_INTERACTIVE) != 0));
++
++					success = gs_dnf5_offline_call_schedule_for_next_boot_sync (offline_proxy,
++												    g_variant_builder_end (options_builder),
++												    &op_success, &op_error_msg, cancellable, &local_error);
++					if (!success) {
++						gs_dnf5_convert_error (&local_error);
++						g_prefix_error_literal (&local_error, "Failed to call OfflineProxy::schedule_for_next_boot: ");
++					} else if (!op_success) {
++						success = FALSE;
++						if (op_error_msg != NULL) {
++							g_set_error_literal (&local_error, GS_PLUGIN_ERROR, GS_PLUGIN_ERROR_FAILED, op_error_msg);
++							g_prefix_error_literal (&local_error, "Failed to call OfflineProxy::schedule_for_next_boot op: ");
++						} else {
++							g_set_error_literal (&local_error, GS_PLUGIN_ERROR, GS_PLUGIN_ERROR_FAILED, "Failed to call OfflineProxy::schedule_for_next_boot op");
++						}
++					}
 +				}
 +			}
 +		}
@@ -5365,6 +5494,9 @@ index 000000000..9edb8d741
 +	gs_dnf5_close_session (self, session_manager, session_path);
 +
 +	if (success) {
++		g_autoptr(GSettings) settings = g_settings_new ("org.gnome.software");
++		/* to check anything installed/updated after today */
++		g_settings_set (settings, "packagekit-historical-updates-timestamp", "t", g_get_real_time () / G_USEC_PER_SEC);
 +		g_task_return_boolean (task, TRUE);
 +	} else {
 +		gs_dnf5_convert_error (&local_error);
@@ -5414,11 +5546,19 @@ index 000000000..9edb8d741
 +		self->session_data.autoclose_timer = 0;
 +	}
 +
-+	if (self->session_data.proxy != NULL) {
-+		gs_dnf5_close_session_real (self->session_data.proxy, self->session_data.object_path);
++	if (self->session_data.session_manager_proxy != NULL) {
++		gs_dnf5_close_session_real (self->session_data.session_manager_proxy, self->session_data.session_path);
 +
-+		g_clear_object (&self->session_data.proxy);
-+		g_clear_pointer (&self->session_data.object_path, g_free);
++		g_clear_object (&self->session_data.session_manager_proxy);
++		g_clear_object (&self->session_data.advisory_proxy);
++		g_clear_object (&self->session_data.base_proxy);
++		g_clear_object (&self->session_data.comps_group_proxy);
++		g_clear_object (&self->session_data.goal_proxy);
++		g_clear_object (&self->session_data.history_proxy);
++		g_clear_object (&self->session_data.offline_proxy);
++		g_clear_object (&self->session_data.rpm_repo_proxy);
++		g_clear_object (&self->session_data.rpm_rpm_proxy);
++		g_clear_pointer (&self->session_data.session_path, g_free);
 +	}
 +	g_mutex_unlock (&self->session_data.mutex);
 +
@@ -5437,6 +5577,7 @@ index 000000000..9edb8d741
 +
 +	g_mutex_clear (&self->session_data.mutex);
 +	g_cond_clear (&self->session_data.cond);
++	g_clear_pointer (&self->session_data.active_calls, g_hash_table_unref);
 +	g_mutex_clear (&self->dependency_sizes_data.mutex);
 +
 +	G_OBJECT_CLASS (gs_plugin_dnf5_parent_class)->finalize (object);
@@ -5496,6 +5637,8 @@ index 000000000..9edb8d741
 +	g_mutex_init (&self->session_data.mutex);
 +	g_cond_init (&self->session_data.cond);
 +	g_mutex_init (&self->dependency_sizes_data.mutex);
++
++	self->session_data.active_calls = g_hash_table_new_full (g_direct_hash, g_direct_equal, NULL, active_call_data_free);
 +
 +	/* getting app properties from appstream is quicker */
 +	gs_plugin_add_rule (plugin, GS_PLUGIN_RULE_RUN_AFTER, "appstream");
@@ -6164,10 +6307,10 @@ index 000000000..5df5184b0
 +</node>
 diff --git a/plugins/dnf5/org.rpm.dnf.v0.Offline.xml b/plugins/dnf5/org.rpm.dnf.v0.Offline.xml
 new file mode 100644
-index 000000000..8d84c22aa
+index 000000000..1df544f83
 --- /dev/null
 +++ b/plugins/dnf5/org.rpm.dnf.v0.Offline.xml
-@@ -0,0 +1,151 @@
+@@ -0,0 +1,175 @@
 +<!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
 +"http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
 +
@@ -6312,6 +6455,30 @@ index 000000000..8d84c22aa
 +    -->
 +    <method name="set_finish_action">
 +        <arg name="action" type="s" direction="in" />
++        <arg name="success" type="b" direction="out" />
++        <arg name="error_msg" type="s" direction="out" />
++    </method>
++    <!--
++        schedule_for_next_boot:
++        @options: an array of key/value pairs to modify the call behavior
++        @success: boolean, true if the offline transaction was successfully scheduled for the next boot
++        @error_msg: string, contains error encountered while scheduling the transaction
++
++        Schedule the prepared offline transaction for the next boot. This creates the magic symlink
++        /system-update and sets the transaction status to "ready". The system will not be rebooted;
++        the caller is responsible for initiating the reboot when appropriate.
++
++        The call might fail if there is no offline transaction in the "download-complete" or "ready" state,
++        or the transaction was not prepared using libdnf5.
++
++        Following @options are supported:
++            - interactive: boolean, default true
++                Set to "true", when the operation is done by a user, thus user interaction like password prompts can be done.
++
++        Unknown options are ignored.
++    -->
++    <method name="schedule_for_next_boot">
++        <arg name="options" type="a{sv}" direction="in" />
 +        <arg name="success" type="b" direction="out" />
 +        <arg name="error_msg" type="s" direction="out" />
 +    </method>
@@ -7105,7 +7272,7 @@ index a108e47e5..a131a5cd3 100644
    subdir('eos-updater')
  endif
 diff --git a/plugins/rpm-ostree/gs-plugin-rpm-ostree.c b/plugins/rpm-ostree/gs-plugin-rpm-ostree.c
-index 7e223dfb6..a6920230d 100644
+index 235aa4a2f..dccd2f45a 100644
 --- a/plugins/rpm-ostree/gs-plugin-rpm-ostree.c
 +++ b/plugins/rpm-ostree/gs-plugin-rpm-ostree.c
 @@ -172,6 +172,7 @@ gs_plugin_rpm_ostree_init (GsPluginRpmOstree *self)
@@ -7129,10 +7296,10 @@ index f7d0ab6f4..0114ae668 100644
  plugins/epiphany/gs-plugin-epiphany.c
  plugins/epiphany/org.gnome.Software.Plugin.Epiphany.metainfo.xml.in
 diff --git a/src/meson.build b/src/meson.build
-index fe2afbab9..9dc9a8578 100644
+index 903e82c1a..39bf19778 100644
 --- a/src/meson.build
 +++ b/src/meson.build
-@@ -269,7 +269,7 @@ if get_option('fwupd')
+@@ -253,7 +253,7 @@ if get_option('fwupd')
    )
  endif
  
