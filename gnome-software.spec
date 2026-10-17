@@ -13,8 +13,8 @@
 
 Summary:	A software center for GNOME
 Name:		gnome-software
-Version:	50.3
-Release:	2
+Version:	51.0
+Release:	1
 License:	GPLv2+
 Group:		Graphical desktop/GNOME
 URL:		https://wiki.gnome.org/Apps/Software
@@ -22,7 +22,7 @@ Source0:	https://download.gnome.org/sources/%{name}/%{url_ver}/%{name}-%{version
 
 %if %{with dnf5}
 # imported from Fedora
-Patch:     0001-dnf5-plugin.patch
+Patch0:     https://src.fedoraproject.org/rpms/gnome-software/blob/rawhide/f/0001-dnf5-plugin.patch
 %endif
 
 
@@ -42,7 +42,6 @@ BuildRequires:	pkgconfig(gio-unix-2.0)
 BuildRequires:	pkgconfig(gtk4)
 BuildRequires:	pkgconfig(glib-testing-0)
 BuildRequires:	pkgconfig(sqlite3)
-BuildRequires:	pkgconfig(libdnf)
 BuildRequires:	pkgconfig(libadwaita-1)
 BuildRequires:	pkgconfig(libnotify)
 BuildRequires:	pkgconfig(libunwind)

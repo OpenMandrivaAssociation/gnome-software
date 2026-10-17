@@ -1,5 +1,5 @@
-at commit 8ad350809393538add93b84125de9157c4235374
-Date:   Wed May 13 13:53:43 2026 +0200
+at commit 0353f7a1b104f548db01e7d28d4ed0d4bb593c94
+Date:   Tue Jul 28 17:36:00 2026 +0200
 
 diff --git a/lib/gs-fedora-third-party.c b/lib/gs-fedora-third-party.c
 index e79bba8cd..9905834a9 100644
@@ -623,10 +623,10 @@ index 000000000..5d522468c
 +G_END_DECLS
 diff --git a/plugins/dnf5/gs-plugin-dnf5.c b/plugins/dnf5/gs-plugin-dnf5.c
 new file mode 100644
-index 000000000..8972267a6
+index 000000000..29302f3cd
 --- /dev/null
 +++ b/plugins/dnf5/gs-plugin-dnf5.c
-@@ -0,0 +1,5028 @@
+@@ -0,0 +1,5197 @@
 +/* -*- Mode: C; tab-width: 8; indent-tabs-mode: t; c-basic-offset: 8 -*-
 + * vi:set noexpandtab tabstop=8 shiftwidth=8:
 + *
@@ -665,6 +665,7 @@ index 000000000..8972267a6
 +
 +#define GS_DNF5_ADVISORIES_KEY "gs-dnf5::advisories"
 +#define GS_DNF5_CHANGELOGS_KEY "gs-dnf5::changelogs"
++#define GS_DNF5_OWNING_PACKAGE_LOOKUP_FAILED_KEY "gs-dnf5::owning-package-lookup-failed"
 +
 +/* for how long a session can be left opened until it's auto-closed */
 +#define GS_SESSION_LIFETIME_SECS (5 * 60)
@@ -3609,6 +3610,100 @@ index 000000000..8972267a6
 +	return TRUE;
 +}
 +
++static gboolean
++gs_dnf5_looks_like_own_app (GsApp *app)
++{
++	const gchar *source_file;
++
++	if (!gs_app_has_management_plugin (app, NULL))
++		return FALSE;
++	if (gs_app_get_state (app) != GS_APP_STATE_INSTALLED)
++		return FALSE;
++	if (gs_app_get_default_source (app) != NULL)
++		return FALSE;
++	if (gs_app_get_kind (app) == AS_COMPONENT_KIND_REPOSITORY)
++		return FALSE;
++	if (gs_app_get_metadata_item (app, GS_DNF5_OWNING_PACKAGE_LOOKUP_FAILED_KEY) != NULL)
++		return FALSE;
++	if (gs_app_get_scope (app) == AS_COMPONENT_SCOPE_USER)
++		return FALSE;
++
++	source_file = gs_app_get_metadata_item (app, "appstream::source-file");
++	if (source_file == NULL || source_file[0] != '/')
++		return FALSE;
++	if (strstr (source_file, "/flatpak/") != NULL ||
++	    strstr (source_file, "/snap/") != NULL ||
++	    strstr (source_file, "/snapd/") != NULL)
++		return FALSE;
++
++	return TRUE;
++}
++
++static gboolean
++gs_dnf5_find_owning_package_name_cb (GsPluginDnf5 *self,
++				     GVariant *package_array,
++				     gpointer user_data,
++				     GCancellable *cancellable,
++				     GError **error)
++{
++	gchar **out_name = user_data;
++	g_autoptr(GVariantDict) dict = NULL;
++	g_autoptr(GVariant) value = NULL;
++
++	dict = g_variant_dict_new (package_array);
++	value = g_variant_dict_lookup_value (dict, "name", G_VARIANT_TYPE_STRING);
++	if (value != NULL)
++		*out_name = g_strdup (g_variant_get_string (value, NULL));
++
++	return FALSE;
++}
++
++static gchar * /* (transfer full) (nullable) */
++gs_dnf5_find_installed_package_owning_file (GsPluginDnf5 *self,
++					    GsDnf5RpmRpm *rpm_proxy,
++					    const gchar *file_path,
++					    GCancellable *cancellable,
++					    GError **error)
++{
++	g_autoptr(GVariantBuilder) patterns_builder = NULL;
++	g_autoptr(GVariantBuilder) attrs_builder = NULL;
++	g_autoptr(GVariantBuilder) options_builder = NULL;
++	g_autoptr(GVariant) result = NULL;
++	gchar *found_name = NULL;
++
++	patterns_builder = g_variant_builder_new (G_VARIANT_TYPE ("as"));
++	g_variant_builder_add (patterns_builder, "s", file_path);
++
++	attrs_builder = g_variant_builder_new (G_VARIANT_TYPE ("as"));
++	g_variant_builder_add (attrs_builder, "s", "name");
++
++	options_builder = g_variant_builder_new (G_VARIANT_TYPE ("a{sv}"));
++	g_variant_builder_add (options_builder, "{sv}", "scope",
++			       g_variant_new_string ("installed"));
++	g_variant_builder_add (options_builder, "{sv}", "with_nevra",
++			       g_variant_new_boolean (FALSE));
++	g_variant_builder_add (options_builder, "{sv}", "with_provides",
++			       g_variant_new_boolean (TRUE));
++	g_variant_builder_add (options_builder, "{sv}", "with_filenames",
++			       g_variant_new_boolean (TRUE));
++	g_variant_builder_add (options_builder, "{sv}", "with_src",
++			       g_variant_new_boolean (FALSE));
++	g_variant_builder_add (options_builder, "{sv}", "package_attrs",
++			       g_variant_builder_end (attrs_builder));
++	g_variant_builder_add (options_builder, "{sv}", "patterns",
++			       g_variant_builder_end (patterns_builder));
++
++	if (!gs_dnf5_rpm_rpm_call_list_sync (rpm_proxy, g_variant_builder_end (options_builder), &result, cancellable, error)) {
++		gs_dnf5_convert_error (error);
++		g_prefix_error_literal (error, "Failed to call list: ");
++		return NULL;
++	}
++
++	if (!gs_dnf5_foreach_item (self, result, gs_dnf5_find_owning_package_name_cb, &found_name, cancellable, error))
++		return NULL;
++
++	return found_name;
++}
 +
 +/* Run in @worker. */
 +static void
@@ -3622,6 +3717,7 @@ index 000000000..8972267a6
 +	GsPluginRefineData *data = task_data;
 +	g_autofree gchar *session_path = NULL;
 +	g_autoptr(GHashTable) apps = NULL;
++	g_autoptr(GPtrArray) unresolved_apps = NULL; /* (element-type GsApp) (not owned) */
 +	g_autoptr(GsDnf5SessionManager) session_manager = NULL;
 +	g_autoptr(GsDnf5RpmRpm) rpm_proxy = NULL;
 +	g_autoptr(GError) local_error = NULL;
@@ -3630,22 +3726,29 @@ index 000000000..8972267a6
 +	assert_in_worker (self);
 +
 +	apps = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_object_unref);
++	unresolved_apps = g_ptr_array_new ();
 +	for (guint i = 0; i < gs_app_list_length (data->list); i++) {
 +		GsApp *app = gs_app_list_index (data->list, i);
-+		if (!gs_app_has_quirk (app, GS_APP_QUIRK_IS_WILDCARD) && (
-+		    gs_app_get_state (app) == GS_APP_STATE_UNKNOWN ||
++
++		if (gs_app_has_quirk (app, GS_APP_QUIRK_IS_WILDCARD))
++			continue;
++
++		if (gs_app_get_state (app) == GS_APP_STATE_UNKNOWN ||
 +		    (data->require_flags & GS_PLUGIN_REFINE_REQUIRE_FLAGS_UPDATE_DETAILS) != 0 ||
 +		    ((data->require_flags & GS_PLUGIN_REFINE_REQUIRE_FLAGS_SIZE_DATA) != 0 &&
-+		      gs_app_list_length (gs_app_get_related (app)) == 0))) {
++		      gs_app_list_length (gs_app_get_related (app)) == 0)) {
 +			if (gs_app_get_default_source (app) != NULL &&
 +			    ((gs_app_has_management_plugin (app, NULL) &&
 +			      gs_app_get_bundle_kind (app) == AS_BUNDLE_KIND_PACKAGE) ||
 +			     gs_app_has_management_plugin (app, plugin)))
 +				g_hash_table_insert (apps, g_strdup (gs_app_get_default_source (app)), g_object_ref (app));
 +		}
++
++		if (gs_dnf5_looks_like_own_app (app))
++			g_ptr_array_add (unresolved_apps, app);
 +	}
 +
-+	if (g_hash_table_size (apps) == 0) {
++	if (g_hash_table_size (apps) == 0 && unresolved_apps->len == 0) {
 +		g_task_return_boolean (task, TRUE);
 +		return;
 +	}
@@ -3660,6 +3763,23 @@ index 000000000..8972267a6
 +
 +	rpm_proxy = gs_dnf5_ref_dbus_proxy_sync (self, session_path, GS_DNF5_PROXY_RPM_RPM, cancellable, &local_error);
 +	success = rpm_proxy != NULL;
++
++	if (success && unresolved_apps->len > 0) {
++		for (guint i = 0; i < unresolved_apps->len; i++) {
++			GsApp *app = g_ptr_array_index (unresolved_apps, i);
++			const gchar *source_file = gs_app_get_metadata_item (app, "appstream::source-file");
++			g_autofree gchar *found_name = NULL;
++
++			found_name = gs_dnf5_find_installed_package_owning_file (self, rpm_proxy, source_file, cancellable, NULL);
++			if (found_name != NULL) {
++				gs_app_add_source (app, found_name);
++				gs_app_set_bundle_kind (app, AS_BUNDLE_KIND_PACKAGE);
++				g_hash_table_insert (apps, g_steal_pointer (&found_name), g_object_ref (app));
++			} else {
++				gs_app_set_metadata (app, GS_DNF5_OWNING_PACKAGE_LOOKUP_FAILED_KEY, "1");
++			}
++		}
++	}
 +
 +	if (success && (data->require_flags & GS_PLUGIN_REFINE_REQUIRE_FLAGS_UPDATE_DETAILS) != 0) {
 +		g_autoptr(GHashTable) advisories = NULL; /* gchar *name ~> gchar *description */
@@ -3779,7 +3899,7 @@ index 000000000..8972267a6
 +		}
 +	}
 +
-+	if (success && data->require_flags != 0) {
++	if (success && data->require_flags != 0 && g_hash_table_size (apps) > 0) {
 +		g_autoptr(GVariantBuilder) attrs_builder = NULL;
 +		g_autoptr(GVariantBuilder) options_builder = NULL;
 +		g_autoptr(GVariantBuilder) patterns_builder = NULL;
@@ -4038,6 +4158,7 @@ index 000000000..8972267a6
 +	g_autoptr(GsDnf5RpmRpm) rpm_proxy = NULL;
 +	g_autoptr(GsApp) progress_app = NULL;
 +	GsAppList *progress_list = is_install ? NULL : list;
++	GsApp *unresolved_app = NULL;
 +	gboolean success;
 +
 +	/* queue for install if installation needs the network */
@@ -4074,6 +4195,8 @@ index 000000000..8972267a6
 +				gs_app_list_add (used_apps, app);
 +				if (progress_list == NULL && progress_app == NULL)
 +					progress_app = g_object_ref (app);
++			} else if (unresolved_app == NULL) {
++				unresolved_app = app;
 +			}
 +		} else if (gs_app_has_quirk (app, GS_APP_QUIRK_IS_PROXY)) {
 +			GsAppList *related = gs_app_get_related (app);
@@ -4097,14 +4220,27 @@ index 000000000..8972267a6
 +			}
 +			if (progress_list == NULL && progress_app == NULL)
 +				progress_app = g_object_ref (app);
++		} else if (unresolved_app == NULL && gs_app_has_management_plugin (app, NULL) &&
++			   gs_app_get_kind (app) != AS_COMPONENT_KIND_REPOSITORY) {
++			unresolved_app = app;
 +		}
 +	}
 +
 +	if (packages->len == 0) {
-+		g_set_error_literal (error,
-+				     GS_PLUGIN_ERROR,
-+				     GS_PLUGIN_ERROR_NOT_SUPPORTED,
-+				     "installing not available");
++		const gchar *app_id;
++
++		if (unresolved_app == NULL)
++			return TRUE;
++
++		app_id = gs_app_get_name (unresolved_app);
++		if (app_id == NULL)
++			app_id = gs_app_get_id (unresolved_app);
++		if (app_id == NULL)
++			app_id = "unknown";
++		g_set_error (error, GS_PLUGIN_ERROR, GS_PLUGIN_ERROR_NOT_SUPPORTED,
++			     is_install ? "cannot install '%s': no package name is known" :
++					  "cannot update '%s': no package name is known", app_id);
++		gs_dnf5_report_error (self, event_callback, event_user_data, unresolved_app, *error, interactive);
 +		return FALSE;
 +	}
 +
@@ -4355,6 +4491,7 @@ index 000000000..8972267a6
 +	g_autoptr(GsDnf5RpmRpm) rpm_proxy = NULL;
 +	g_autoptr(GsApp) progress_app = NULL;
 +	g_autoptr(GError) local_error = NULL;
++	GsApp *unresolved_app = NULL;
 +	gboolean success;
 +
 +	assert_in_worker (self);
@@ -4366,17 +4503,36 @@ index 000000000..8972267a6
 +		g_autoptr(GsAppList) addons = NULL;
 +		GsApp *app = gs_app_list_index (data->apps, i);
 +		const gchar *source;
-+		if (!gs_app_has_management_plugin (app, plugin))
++		if (!gs_app_has_management_plugin (app, plugin)) {
++			if (gs_app_has_management_plugin (app, NULL) &&
++			    gs_app_get_kind (app) != AS_COMPONENT_KIND_REPOSITORY) {
++				const gchar *app_id = gs_app_get_name (app);
++				if (app_id == NULL)
++					app_id = gs_app_get_id (app);
++				if (app_id == NULL)
++					app_id = "unknown";
++				g_set_error (&local_error, GS_PLUGIN_ERROR, GS_PLUGIN_ERROR_NOT_SUPPORTED,
++					     "cannot uninstall '%s': no package name is known", app_id);
++				unresolved_app = app;
++				break;
++			}
 +			continue;
++		}
 +		if (gs_app_get_kind (app) == AS_COMPONENT_KIND_REPOSITORY) {
 +			g_warn_if_reached ();
 +			continue;
 +		}
 +		source = gs_app_get_default_source (app);
 +		if (source == NULL) {
-+			g_task_return_new_error (task, GS_PLUGIN_ERROR, GS_PLUGIN_ERROR_NOT_SUPPORTED,
-+						 "remove not available");
-+			return;
++			const gchar *app_id = gs_app_get_name (app);
++			if (app_id == NULL)
++				app_id = gs_app_get_id (app);
++			if (app_id == NULL)
++				app_id = "unknown";
++			g_set_error (&local_error, GS_PLUGIN_ERROR, GS_PLUGIN_ERROR_NOT_SUPPORTED,
++				     "cannot uninstall '%s': no package name is known", app_id);
++			unresolved_app = app;
++			break;
 +		}
 +		g_ptr_array_add (packages, g_strdup (source));
 +		g_ptr_array_add (touched_apps, g_object_ref (app));
@@ -4397,6 +4553,19 @@ index 000000000..8972267a6
 +				}
 +			}
 +		}
++	}
++
++	if (local_error != NULL) {
++		for (guint i = 0; i < touched_apps->len; i++) {
++			GsApp *app = g_ptr_array_index (touched_apps, i);
++			if (gs_app_get_state (app) == GS_APP_STATE_REMOVING)
++				gs_app_set_state_recover (app);
++		}
++
++		gs_dnf5_report_error (self, data->event_callback, data->event_user_data, unresolved_app,
++			local_error, (data->flags & GS_PLUGIN_UNINSTALL_APPS_FLAGS_INTERACTIVE) != 0);
++		g_task_return_error (task, g_steal_pointer (&local_error));
++		return;
 +	}
 +
 +	if (packages->len == 0) {
@@ -7308,3 +7477,4 @@ index 903e82c1a..39bf19778 100644
    i18n.merge_file(
      input:
       configure_file(
+
