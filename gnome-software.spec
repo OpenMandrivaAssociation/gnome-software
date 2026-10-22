@@ -14,7 +14,7 @@
 Summary:	A software center for GNOME
 Name:		gnome-software
 Version:	51.0
-Release:	2
+Release:	3
 License:	GPLv2+
 Group:		Graphical desktop/GNOME
 URL:		https://wiki.gnome.org/Apps/Software
