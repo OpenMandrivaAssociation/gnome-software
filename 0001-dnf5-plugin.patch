@@ -1,5 +1,5 @@
-at commit 0353f7a1b104f548db01e7d28d4ed0d4bb593c94
-Date:   Tue Jul 28 17:36:00 2026 +0200
+at commit c04643f14122cdb6ed8400d098c8201ab1557cf5
+Date:   Tue Oct 13 11:59:31 2026 +0200
 
 diff --git a/lib/gs-fedora-third-party.c b/lib/gs-fedora-third-party.c
 index e79bba8cd..9905834a9 100644
@@ -623,10 +623,10 @@ index 000000000..5d522468c
 +G_END_DECLS
 diff --git a/plugins/dnf5/gs-plugin-dnf5.c b/plugins/dnf5/gs-plugin-dnf5.c
 new file mode 100644
-index 000000000..29302f3cd
+index 000000000..a5c317bff
 --- /dev/null
 +++ b/plugins/dnf5/gs-plugin-dnf5.c
-@@ -0,0 +1,5197 @@
+@@ -0,0 +1,5219 @@
 +/* -*- Mode: C; tab-width: 8; indent-tabs-mode: t; c-basic-offset: 8 -*-
 + * vi:set noexpandtab tabstop=8 shiftwidth=8:
 + *
@@ -1942,6 +1942,12 @@ index 000000000..29302f3cd
 +
 +		if ((flags & GS_DNF5_READ_PACKAGE_FLAG_CAN_CACHED) != 0)
 +			gs_plugin_cache_add (GS_PLUGIN (self), name, app);
++	}
++
++	value = g_variant_dict_lookup_value (dict, "nevra", G_VARIANT_TYPE_STRING);
++	if (value != NULL) {
++		gs_app_set_metadata (app, "GnomeSoftware::packagename-value", g_variant_get_string (value, NULL));
++		g_clear_pointer (&value, g_variant_unref);
 +	}
 +
 +	gs_dnf5_update_app_changelogs (app, flags, dict);
@@ -3527,6 +3533,15 @@ index 000000000..29302f3cd
 +		gs_dnf5_update_app_state (app, GS_APP_STATE_UNKNOWN, dict);
 +	}
 +
++	g_clear_pointer (&value, g_variant_unref);
++
++	value = g_variant_dict_lookup_value (dict, "nevra", G_VARIANT_TYPE_STRING);
++	if (value != NULL) {
++		const gchar *nevra = g_variant_get_string (value, NULL);
++		if (nevra != NULL && *nevra != '\0')
++			gs_app_set_metadata (app, "GnomeSoftware::packagename-value", nevra);
++	}
++
 +	return TRUE;
 +}
 +
@@ -3917,6 +3932,7 @@ index 000000000..29302f3cd
 +		}
 +
 +		attrs_builder = g_variant_builder_new (G_VARIANT_TYPE ("as"));
++		g_variant_builder_add (attrs_builder, "s", "nevra");
 +		g_variant_builder_add (attrs_builder, "s", "name");
 +		g_variant_builder_add (attrs_builder, "s", "version");
 +		g_variant_builder_add (attrs_builder, "s", "release");
@@ -5808,6 +5824,12 @@ index 000000000..29302f3cd
 +	g_mutex_init (&self->dependency_sizes_data.mutex);
 +
 +	self->session_data.active_calls = g_hash_table_new_full (g_direct_hash, g_direct_equal, NULL, active_call_data_free);
++
++	/* disable on OSTree */
++	if (g_file_test ("/run/ostree-booted", G_FILE_TEST_EXISTS)) {
++		gs_plugin_set_enabled (plugin, FALSE);
++		return;
++	}
 +
 +	/* getting app properties from appstream is quicker */
 +	gs_plugin_add_rule (plugin, GS_PLUGIN_RULE_RUN_AFTER, "appstream");
